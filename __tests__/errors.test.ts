@@ -13,7 +13,10 @@ describe('AppError.from', () => {
   });
 
   it('maps PGRST116 (.single() matched no rows) to not_found', () => {
-    const err = AppError.from({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' });
+    const err = AppError.from({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+    });
     expect(err.kind).toBe('not_found');
     expect(err.message).toBe('Not found, or you no longer have access.');
   });
@@ -33,7 +36,8 @@ describe('AppError.from', () => {
   it('maps 23514 (check_violation) to validation and keeps the DB message', () => {
     const err = AppError.from({
       code: '23514',
-      message: 'new row for relation "kharcha" violates check constraint "kharcha_visibility_check"',
+      message:
+        'new row for relation "kharcha" violates check constraint "kharcha_visibility_check"',
     });
     expect(err.kind).toBe('validation');
     expect(err.message).toContain('violates check constraint');
@@ -84,9 +88,7 @@ describe('AppError.from', () => {
   });
 
   it('prefers the network classification over status codes', () => {
-    expect(AppError.from({ status: 403, message: 'Network request failed' }).kind).toBe(
-      'network',
-    );
+    expect(AppError.from({ status: 403, message: 'Network request failed' }).kind).toBe('network');
   });
 });
 
