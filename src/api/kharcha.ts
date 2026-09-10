@@ -8,7 +8,7 @@ import type { TablesUpdate } from '../types/database';
 import { toKharcha, type Kharcha, type KharchaInput } from '../types/models';
 
 const COLUMNS =
-  'id, owner_id, amount, category, note, expense_date, receipt_path, visibility, created_at, updated_at';
+  'id, owner_id, amount, category, category_icon, note, expense_date, receipt_path, visibility, created_at, updated_at';
 
 export async function listKharcha(): Promise<Kharcha[]> {
   const { data, error } = await supabase
@@ -54,6 +54,7 @@ export async function createKharcha(input: KharchaInput): Promise<Kharcha> {
       owner_id: ownerId,
       amount: Number(input.amount.toFixed(2)),
       category: input.category.trim(),
+      category_icon: input.category_icon ?? null,
       note: input.note?.trim() || null,
       expense_date: input.expense_date,
       visibility: input.visibility ?? 'private',
@@ -76,6 +77,9 @@ export async function updateKharcha(
   }
   if (patch.category !== undefined) {
     update.category = patch.category.trim();
+  }
+  if (patch.category_icon !== undefined) {
+    update.category_icon = patch.category_icon;
   }
   if (patch.note !== undefined) {
     update.note = patch.note?.trim() || null;

@@ -1,8 +1,11 @@
 /**
  * Visual identity for categories. Low-literacy users recognise the icon and
  * colour long before they read the label, so every category gets both.
+ * The emoji comes from the org's category list (or the icon frozen on an
+ * expense row); the background colour is derived from the name so it stays
+ * stable without any configuration.
  */
-import { CATEGORIES, type Category } from '../types/models';
+import { DEFAULT_CATEGORIES } from '../types/models';
 
 export interface CategoryMeta {
   name: string;
@@ -11,27 +14,78 @@ export interface CategoryMeta {
   bg: string;
 }
 
-const META: Record<Category, Omit<CategoryMeta, 'name'>> = {
-  Food: { emoji: '🍽️', bg: '#FFE8D6' },
-  Transport: { emoji: '🚌', bg: '#DDEBFF' },
-  Groceries: { emoji: '🛒', bg: '#E2F5E1' },
-  Bills: { emoji: '💡', bg: '#FFF3C4' },
-  Health: { emoji: '💊', bg: '#FFE0E0' },
-  Shopping: { emoji: '🛍️', bg: '#F3E3FF' },
-  Entertainment: { emoji: '🎬', bg: '#E0F4FF' },
-  Education: { emoji: '📚', bg: '#E8E9FF' },
-  Rent: { emoji: '🏠', bg: '#E5F0E8' },
-  Other: { emoji: '📦', bg: '#ECEEF1' },
-};
+const PALETTE = [
+  '#FFE8D6',
+  '#DDEBFF',
+  '#E2F5E1',
+  '#FFF3C4',
+  '#FFE0E0',
+  '#F3E3FF',
+  '#E0F4FF',
+  '#E8E9FF',
+  '#E5F0E8',
+  '#FDE7F3',
+] as const;
 
-export function isKnownCategory(name: string): name is Category {
-  return (CATEGORIES as readonly string[]).includes(name);
+function hashName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    h = (h * 31 + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
 }
 
-/** Icon/colour for any stored category string; custom names fall back to "Other". */
-export function getCategoryMeta(name: string): CategoryMeta {
-  const key: Category = isKnownCategory(name) ? name : 'Other';
-  return { name, ...META[key] };
+export function categoryBg(name: string): string {
+  const key = name.trim().toLowerCase();
+  return PALETTE[hashName(key) % PALETTE.length] ?? '#ECEEF1';
 }
 
-export const CATEGORY_TILES: CategoryMeta[] = CATEGORIES.map(c => ({ name: c, ...META[c] }));
+/** Emoji for a category name when no icon is stored (old rows, offline). */
+export function defaultEmojiFor(name: string): string {
+  const key = name.trim().toLowerCase();
+  const hit = DEFAULT_CATEGORIES.find(c => c.name.toLowerCase() === key);
+  return hit?.emoji ?? '📦';
+}
+
+/**
+ * Icon + colour for a category. Pass the stored `category_icon` when you
+ * have it; otherwise the default list is consulted, then a generic box.
+ */
+export function getCategoryMeta(name: string, icon?: string | null): CategoryMeta {
+  return { name, emoji: icon || defaultEmojiFor(name), bg: categoryBg(name) };
+}
+
+/** Fallback tiles used before the org list has loaded (or offline). */
+export const CATEGORY_TILES: CategoryMeta[] = DEFAULT_CATEGORIES.map(c => ({
+  name: c.name,
+  emoji: c.emoji,
+  bg: categoryBg(c.name),
+}));
+
+/** A friendly set of icons the admin can pick from when adding a category. */
+export const EMOJI_CHOICES: readonly string[] = [
+  '🌾',
+  '🐣',
+  '🐔',
+  '🥚',
+  '💊',
+  '💉',
+  '👷',
+  '💡',
+  '💧',
+  '🚚',
+  '🔧',
+  '🛠️',
+  '🌿',
+  '🏠',
+  '🧹',
+  '🧴',
+  '⛽',
+  '📦',
+  '🧾',
+  '💵',
+  '🛒',
+  '🏗️',
+  '📱',
+  '🧊',
+];

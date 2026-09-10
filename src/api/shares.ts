@@ -7,7 +7,7 @@ export async function listSharesForKharcha(kharchaId: string): Promise<KharchaSh
   const { data, error } = await supabase
     .from('kharcha_shares')
     .select(
-      'kharcha_id, shared_with, shared_by, created_at, profile:profiles!kharcha_shares_shared_with_fkey(id, email, email_lower, display_name, avatar_url, created_at)',
+      'kharcha_id, shared_with, shared_by, created_at, profile:profiles!kharcha_shares_shared_with_fkey(id, email, email_lower, display_name, avatar_url, role, disabled, created_at)',
     )
     .eq('kharcha_id', kharchaId)
     .order('created_at');

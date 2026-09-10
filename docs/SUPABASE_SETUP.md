@@ -219,3 +219,48 @@ bun run db:types
 requires `supabase login` first.) Commit the regenerated file together with
 the migration; `src/types/models.ts` narrows the generated row types into
 the app models.
+
+## Internal-app model (invite-only, roles, org categories)
+
+Migrations `20260910170000` and `20260910180000` turn the app into a closed
+staff tool. The second one supersedes the first (per-user contact lists were
+replaced by invite-only sign-up); both are kept because both were applied.
+
+### Accounts
+
+- **Sign-up is invite-only.** A `before insert` trigger on `auth.users`
+  (`enforce_invite_only`) rejects any email that is not in `public.invites`
+  with `accepted_at is null`. This covers email/password *and* Google sign-in.
+- **Bootstrap:** while no admin exists, the first account to sign up is let
+  through and becomes `admin`. Do this right after deploying — or pre-seed
+  the admin instead:
+
+  ```sql
+  insert into public.invites (email, role) values ('owner@yourfarm.com', 'admin');
+  ```
+
+  To promote an existing account: `update public.profiles set role = 'admin' where email = '…';`
+- **Roles:** `profiles.role` is `admin` or `member`. A trigger
+  (`guard_profile_privileges`) stops non-admins from changing `role` or
+  `disabled` — even on their own row.
+- **Disabling:** `profiles.disabled = true` keeps the login but every data
+  policy requires `is_active_member()`, so the account sees and writes nothing.
+  (Deleting the auth user needs the dashboard or service role.)
+
+### Expense types
+
+`public.categories` is one org-wide list (poultry defaults seeded once:
+Feed, Chicks, Medicine, Vaccine, Labour, Electricity, Water, Transport,
+Equipment, Repair, Bedding, Rent, Other). Everyone reads it; only admins write
+(`categories_admin_write`). `kharcha.category_icon` freezes the emoji on each
+expense so renaming a type later doesn't rewrite history.
+
+### Sharing
+
+Any active member can share with any colleague — the directory
+(`profiles_select`) only ever contains invited staff.
+
+### Smoke-test account
+
+`demo@kharcha.test` was created before the invite gate and is a `member`.
+It is what CI signs in with; it is not an admin.

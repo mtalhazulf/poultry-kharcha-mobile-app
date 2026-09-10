@@ -10,10 +10,70 @@ export type Database = {
   };
   public: {
     Tables: {
+      categories: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          emoji: string;
+          id: string;
+          name: string;
+          sort_order: number;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          emoji?: string;
+          id?: string;
+          name: string;
+          sort_order?: number;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          emoji?: string;
+          id?: string;
+          name?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      invites: {
+        Row: {
+          accepted_at: string | null;
+          created_at: string;
+          email: string;
+          invited_by: string | null;
+          role: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          created_at?: string;
+          email: string;
+          invited_by?: string | null;
+          role?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          created_at?: string;
+          email?: string;
+          invited_by?: string | null;
+          role?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'invites_invited_by_fkey';
+            columns: ['invited_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       kharcha: {
         Row: {
           amount: number;
           category: string;
+          category_icon: string | null;
           created_at: string;
           expense_date: string;
           id: string;
@@ -26,6 +86,7 @@ export type Database = {
         Insert: {
           amount: number;
           category: string;
+          category_icon?: string | null;
           created_at?: string;
           expense_date: string;
           id?: string;
@@ -38,6 +99,7 @@ export type Database = {
         Update: {
           amount?: number;
           category?: string;
+          category_icon?: string | null;
           created_at?: string;
           expense_date?: string;
           id?: string;
@@ -104,26 +166,32 @@ export type Database = {
         Row: {
           avatar_url: string | null;
           created_at: string;
+          disabled: boolean;
           display_name: string | null;
           email: string;
           email_lower: string | null;
           id: string;
+          role: string;
         };
         Insert: {
           avatar_url?: string | null;
           created_at?: string;
+          disabled?: boolean;
           display_name?: string | null;
           email: string;
           email_lower?: string | null;
           id: string;
+          role?: string;
         };
         Update: {
           avatar_url?: string | null;
           created_at?: string;
+          disabled?: boolean;
           display_name?: string | null;
           email?: string;
           email_lower?: string | null;
           id?: string;
+          role?: string;
         };
         Relationships: [];
       };
@@ -133,6 +201,9 @@ export type Database = {
     };
     Functions: {
       can_access_kharcha: { Args: { k_id: string }; Returns: boolean };
+      is_active_member: { Args: never; Returns: boolean };
+      is_admin: { Args: never; Returns: boolean };
+      is_shared_with_me: { Args: { k_id: string }; Returns: boolean };
       owns_kharcha: { Args: { k_id: string }; Returns: boolean };
       safe_uuid: { Args: { value: string }; Returns: string };
     };

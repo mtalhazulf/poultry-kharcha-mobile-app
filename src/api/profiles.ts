@@ -2,7 +2,7 @@ import { AppError } from '../lib/errors';
 import { requireUserId, supabase } from '../lib/supabase';
 import { toProfile, type Profile } from '../types/models';
 
-const COLUMNS = 'id, email, email_lower, display_name, avatar_url, created_at';
+const COLUMNS = 'id, email, email_lower, display_name, avatar_url, role, disabled, created_at';
 
 export async function getMyProfile(): Promise<Profile> {
   const id = await requireUserId();
@@ -43,8 +43,9 @@ export async function getProfilesByIds(ids: string[]): Promise<Profile[]> {
 }
 
 /**
- * Share-modal search. Matches on the generated lower-cased column so the
- * trigram index is used; excludes the caller and anyone already in `exclude`.
+ * Share-modal search across the staff directory (the app is invite-only, so
+ * every profile is a colleague). Matches on the generated lower-cased column
+ * so the trigram index is used; excludes the caller and anyone in `exclude`.
  */
 export async function searchProfilesByEmail(
   term: string,

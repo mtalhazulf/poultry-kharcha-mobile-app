@@ -9,6 +9,13 @@ receipt, and share individual expenses read-only with other users by email.
 - Backend: Supabase project `ikiepqpfhmdprqezrbgq`
   (`https://ikiepqpfhmdprqezrbgq.supabase.co`)
 
+> **Internal app.** Sign-up is invite-only: an admin adds staff emails in
+> **Settings → Staff**; the database rejects everyone else (email *and*
+> Google). The first account created becomes the admin — do that immediately
+> after deploying (or pre-seed it, see `docs/SUPABASE_SETUP.md`). Expense
+> types are one org-wide list (poultry defaults) that admins edit in
+> **Settings → Expense types**.
+
 ## Architecture
 
 | Layer | What it does |
