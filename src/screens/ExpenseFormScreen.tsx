@@ -4,21 +4,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createKharcha, getKharcha, updateKharcha } from '../api/kharcha';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { ReceiptPreview } from '../components/ReceiptPreview';
-import { Button, ErrorBanner, InfoBanner, LoadingView, TextField } from '../components/ui';
+import { Button, Chip, ErrorBanner, InfoBanner, LoadingView, TextField } from '../components/ui';
 import { useAuth } from '../context/AuthProvider';
 import { AppError } from '../lib/errors';
 import { deleteReceipt, pickReceipt, uploadReceipt, type PickedFile } from '../lib/receipts';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, formatDate, radius, spacing, toIsoDate, typography } from '../theme';
+import { CURRENCY, colors, formatDateFriendly, spacing, toIsoDate, typography } from '../theme';
 import type { Kharcha, KharchaInput } from '../types/models';
 
 type Props = RootStackScreenProps<'ExpenseForm'>;
@@ -38,6 +39,12 @@ function parseDate(isoDate: string): Date {
   return new Date(y, m - 1, d);
 }
 
+function daysAgo(from: Date, days: number): Date {
+  const d = new Date(from);
+  d.setDate(from.getDate() - days);
+  return d;
+}
+
 /**
  * Create (no `kharchaId`) or edit (with `kharchaId`) an expense. The owner
  * check that disables the form for non-owners is cosmetic only — RLS on
@@ -47,6 +54,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
   const kharchaId = route.params?.kharchaId;
   const isEdit = kharchaId !== undefined;
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [existing, setExisting] = useState<Kharcha | null>(null);
   const [loading, setLoading] = useState(isEdit);
@@ -66,6 +74,8 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
   const [saveError, setSaveError] = useState<AppError | null>(null);
 
   const today = useMemo(() => new Date(), []);
+  const todayIso = useMemo(() => toIsoDate(today), [today]);
+  const yesterdayIso = useMemo(() => toIsoDate(daysAgo(today, 1)), [today]);
   const isOwner = !isEdit || (existing !== null && user !== null && existing.owner_id === user.id);
 
   useLayoutEffect(() => {
@@ -209,14 +219,26 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     return (
       <View style={styles.centered}>
         <ErrorBanner message={loadError.message} kind={loadError.kind} onRetry={load} />
-        <Button title="Back" variant="secondary" onPress={() => navigation.goBack()} />
+        <Button
+          title="Back"
+          icon="↩️"
+          size="lg"
+          variant="secondary"
+          onPress={() => navigation.goBack()}
+        />
       </View>
     );
   }
 
   const readOnly = !isOwner;
+  const locked = readOnly || saving;
   const previewPath = receiptRemoved ? null : existing?.receipt_path ?? null;
   const hasReceipt = picked !== null || previewPath !== null;
+
+  const dateIso = toIsoDate(date);
+  const isToday = dateIso === todayIso;
+  const isYesterday = dateIso === yesterdayIso;
+  const isOtherDate = !isToday && !isYesterday;
 
   return (
     <KeyboardAvoidingView
@@ -228,7 +250,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        {readOnly ? <InfoBanner message="Only the owner can edit this expense" /> : null}
+        {readOnly ? <InfoBanner icon="🔒" message="Only the owner can edit this expense" /> : null}
         {saveError ? (
           <ErrorBanner
             message={saveError.message}
@@ -237,60 +259,86 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
           />
         ) : null}
 
-        <TextField
-          label="Amount"
-          testID="form-amount"
-          placeholder="0.00"
-          value={amount}
-          onChangeText={text => {
-            setAmount(text);
-            if (fieldErrors.amount) {
-              setFieldErrors(prev => ({ ...prev, amount: undefined }));
-            }
-          }}
-          keyboardType="decimal-pad"
-          editable={!readOnly && !saving}
-          error={fieldErrors.amount}
-        />
+        {/* Amount — the one number that matters, so it is the biggest thing on screen. */}
+        <View style={styles.block}>
+          <Text style={styles.label}>Amount</Text>
+          <View style={[styles.amountRow, fieldErrors.amount ? styles.amountRowError : null]}>
+            <Text style={styles.currency}>{CURRENCY}</Text>
+            <TextInput
+              testID="form-amount"
+              accessibilityLabel="Amount"
+              placeholder="0"
+              placeholderTextColor={colors.textMuted}
+              value={amount}
+              onChangeText={text => {
+                setAmount(text);
+                if (fieldErrors.amount) {
+                  setFieldErrors(prev => ({ ...prev, amount: undefined }));
+                }
+              }}
+              keyboardType="decimal-pad"
+              autoFocus={!isEdit}
+              editable={!locked}
+              style={styles.amountInput}
+            />
+          </View>
+          {fieldErrors.amount ? <Text style={styles.error}>{fieldErrors.amount}</Text> : null}
+        </View>
 
-        <CategoryPicker
-          value={category}
-          onChange={value => {
-            if (readOnly || saving) {
-              return;
-            }
-            setCategory(value);
-            if (fieldErrors.category) {
-              setFieldErrors(prev => ({ ...prev, category: undefined }));
-            }
-          }}
-          error={fieldErrors.category}
-        />
+        <View style={styles.block}>
+          <Text style={styles.label}>What for?</Text>
+          <CategoryPicker
+            value={category}
+            onChange={value => {
+              if (locked) {
+                return;
+              }
+              setCategory(value);
+              if (fieldErrors.category) {
+                setFieldErrors(prev => ({ ...prev, category: undefined }));
+              }
+            }}
+            error={fieldErrors.category}
+          />
+        </View>
 
-        <TextField
-          label="Note"
-          testID="form-note"
-          placeholder="What was this for?"
-          value={note}
-          onChangeText={setNote}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-          style={styles.noteInput}
-          editable={!readOnly && !saving}
-        />
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Date</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Change date"
-            disabled={readOnly || saving}
-            onPress={() => setShowPicker(true)}
-            style={({ pressed }) => [styles.dateButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.dateText}>{formatDate(toIsoDate(date))}</Text>
-          </Pressable>
+        <View style={styles.block}>
+          <Text style={styles.label}>When?</Text>
+          <View style={styles.chipRow}>
+            <Chip
+              label="Today"
+              icon="📅"
+              selected={isToday}
+              onPress={() => {
+                if (!locked) {
+                  setDate(new Date());
+                }
+              }}
+              testID="date-today"
+            />
+            <Chip
+              label="Yesterday"
+              icon="🕘"
+              selected={isYesterday}
+              onPress={() => {
+                if (!locked) {
+                  setDate(daysAgo(new Date(), 1));
+                }
+              }}
+              testID="date-yesterday"
+            />
+            <Chip
+              label={isOtherDate ? formatDateFriendly(dateIso, today) : 'Other date'}
+              icon="🗓️"
+              selected={isOtherDate}
+              onPress={() => {
+                if (!locked) {
+                  setShowPicker(true);
+                }
+              }}
+              testID="date-other"
+            />
+          </View>
           {showPicker ? (
             <DateTimePicker
               value={date}
@@ -302,49 +350,74 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
           ) : null}
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Receipt</Text>
+        <TextField
+          label="Note (optional)"
+          icon="📝"
+          testID="form-note"
+          placeholder="What was this for?"
+          value={note}
+          onChangeText={setNote}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+          style={styles.noteInput}
+          editable={!locked}
+        />
+
+        <View style={styles.block}>
+          <Text style={styles.label}>Receipt (optional)</Text>
           {hasReceipt ? (
             <ReceiptPreview
               path={previewPath}
               localUri={picked?.uri ?? null}
               onRemove={readOnly ? undefined : removeReceipt}
             />
+          ) : readOnly ? (
+            <Text style={styles.hint}>No receipt</Text>
           ) : (
-            <Text style={styles.hint}>No receipt attached.</Text>
-          )}
-          {!readOnly ? (
             <View style={styles.receiptActions}>
               <Button
-                title="Take photo"
+                title="Photo"
+                icon="📷"
                 variant="secondary"
                 onPress={() => pick('camera')}
                 disabled={saving}
                 style={styles.receiptButton}
               />
               <Button
-                title="Choose from gallery"
+                title="Gallery"
+                icon="🖼️"
                 variant="secondary"
                 onPress={() => pick('gallery')}
                 disabled={saving}
                 style={styles.receiptButton}
               />
             </View>
-          ) : null}
+          )}
         </View>
+      </ScrollView>
 
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
         {readOnly ? (
-          <Button title="Back" variant="secondary" onPress={() => navigation.goBack()} />
+          <Button
+            title="Back"
+            icon="↩️"
+            size="lg"
+            variant="secondary"
+            onPress={() => navigation.goBack()}
+          />
         ) : (
           <Button
-            title={isEdit ? 'Save changes' : 'Save expense'}
+            title={isEdit ? 'Save changes' : 'Save'}
+            icon="✅"
+            size="lg"
             testID="form-submit"
             onPress={submit}
             loading={saving}
             disabled={saving}
           />
         )}
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -353,21 +426,37 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   centered: { flex: 1, padding: spacing.lg, justifyContent: 'center', gap: spacing.md },
-  field: { marginBottom: spacing.lg },
-  label: { ...typography.label, marginBottom: spacing.xs },
-  hint: { ...typography.caption, marginBottom: spacing.sm },
-  noteInput: { minHeight: 88, paddingTop: spacing.md },
-  dateButton: {
-    minHeight: 48,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+  block: { marginBottom: spacing.lg },
+  label: { ...typography.label, marginBottom: spacing.sm },
+  hint: { ...typography.caption },
+  error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    paddingBottom: spacing.xs,
   },
-  dateText: { ...typography.body },
-  pressed: { opacity: 0.85 },
-  receiptActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  amountRowError: { borderBottomColor: colors.danger },
+  currency: { ...typography.heading, color: colors.textMuted },
+  amountInput: {
+    flex: 1,
+    minHeight: 64,
+    paddingVertical: 0,
+    fontSize: 40,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  noteInput: { minHeight: 88, paddingTop: spacing.md },
+  receiptActions: { flexDirection: 'row', gap: spacing.sm },
   receiptButton: { flex: 1 },
+  footer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
 });

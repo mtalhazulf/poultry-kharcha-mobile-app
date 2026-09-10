@@ -4,7 +4,7 @@ import { useSignedUrl } from '../hooks/useSignedUrl';
 import { AppError } from '../lib/errors';
 import { isPdfPath } from '../lib/receipts';
 import { colors, radius, spacing, typography } from '../theme';
-import { Button, Card, ErrorBanner } from './ui';
+import { Button, Card, ErrorBanner, IconCircle } from './ui';
 
 interface ReceiptPreviewProps {
   /** Storage key of an uploaded receipt (`{kharcha_id}/{filename}`). */
@@ -65,9 +65,18 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
   } else if (path && isPdfPath(path)) {
     content = (
       <Card style={styles.pdfCard}>
-        <Text style={styles.pdfTitle}>PDF receipt</Text>
-        <Text style={styles.pdfHint}>Opens in your PDF viewer.</Text>
-        <Button title="Open" variant="secondary" onPress={openPdf} style={styles.pdfButton} />
+        <View style={styles.pdfHeader}>
+          <IconCircle emoji="📄" bg={colors.primarySoft} size={48} />
+          <Text style={styles.pdfTitle}>Receipt (PDF)</Text>
+        </View>
+        <Button
+          title="Open"
+          icon="📂"
+          size="lg"
+          variant="secondary"
+          onPress={openPdf}
+          style={styles.pdfButton}
+        />
         {openError ? <ErrorBanner message={openError.message} kind={openError.kind} /> : null}
       </Card>
     );
@@ -100,9 +109,7 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
   return (
     <View style={styles.container}>
       {content}
-      {onRemove ? (
-        <Button title="Remove receipt" variant="ghost" onPress={onRemove} style={styles.remove} />
-      ) : null}
+      {onRemove ? <Button title="Remove" icon="🗑️" variant="secondary" onPress={onRemove} /> : null}
     </View>
   );
 }
@@ -118,9 +125,8 @@ const styles = StyleSheet.create({
   },
   image: { width: '100%', height: '100%' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  pdfCard: { alignItems: 'flex-start', gap: spacing.sm },
-  pdfTitle: { ...typography.heading },
-  pdfHint: { ...typography.caption },
-  pdfButton: { alignSelf: 'stretch', marginTop: spacing.xs },
-  remove: { alignSelf: 'flex-start', minHeight: 40 },
+  pdfCard: { gap: spacing.md },
+  pdfHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  pdfTitle: { ...typography.heading, flex: 1 },
+  pdfButton: { alignSelf: 'stretch' },
 });

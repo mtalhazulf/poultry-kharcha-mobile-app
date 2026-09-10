@@ -8,10 +8,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { searchProfilesByEmail } from '../api/profiles';
 import { shareKharcha } from '../api/shares';
 import { AppError } from '../lib/errors';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, spacing, touch, typography } from '../theme';
 import type { Profile } from '../types/models';
 import { Button, Chip, ErrorBanner, TextField } from './ui';
 
@@ -38,6 +39,7 @@ export function ShareModal({
   onClose,
   onShared,
 }: ShareModalProps) {
+  const insets = useSafeAreaInsets();
   const [term, setTerm] = useState('');
   const [results, setResults] = useState<Profile[]>([]);
   const [searching, setSearching] = useState(false);
@@ -139,7 +141,11 @@ export function ShareModal({
           accessibilityRole="checkbox"
           accessibilityState={{ checked: isSelected }}
           onPress={() => toggle(item)}
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          style={({ pressed }) => [
+            styles.row,
+            isSelected && styles.rowSelected,
+            pressed && styles.rowPressed,
+          ]}
         >
           <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
             {isSelected ? <Text style={styles.checkmark}>{'✓'}</Text> : null}
@@ -162,7 +168,7 @@ export function ShareModal({
 
   let hint: string | null = null;
   if (trimmed.length < MIN_QUERY) {
-    hint = 'Type at least 2 characters of an email address to search.';
+    hint = 'Type at least 2 letters of their email to search.';
   } else if (!searching && !searchError && results.length === 0) {
     hint = 'No one found with that email.';
   }
@@ -175,70 +181,75 @@ export function ShareModal({
       onRequestClose={onClose}
     >
       <View style={styles.sheet}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Share expense</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            onPress={onClose}
-            hitSlop={8}
-          >
-            <Text style={styles.close}>Close</Text>
-          </Pressable>
+        <View style={[styles.body, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
+          <View style={styles.header}>
+            <Text style={styles.title}>👥 Share with</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              onPress={onClose}
+              style={({ pressed }) => [styles.close, pressed && styles.closePressed]}
+            >
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
+          </View>
+
+          <TextField
+            icon="🔍"
+            placeholder="Type their email"
+            value={term}
+            onChangeText={setTerm}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            returnKeyType="search"
+            containerStyle={styles.search}
+          />
+
+          {selectedList.length > 0 ? (
+            <View style={styles.chips}>
+              {selectedList.map(p => (
+                <Chip
+                  key={p.id}
+                  icon="👤"
+                  label={p.display_name ?? p.email}
+                  selected
+                  onPress={() => toggle(p)}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {searchError ? (
+            <ErrorBanner
+              message={searchError.message}
+              kind={searchError.kind}
+              onDismiss={() => setSearchError(null)}
+            />
+          ) : null}
+
+          {searching ? (
+            <View style={styles.searching}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : null}
+
+          <FlatList
+            data={results}
+            keyExtractor={p => p.id}
+            renderItem={renderItem}
+            keyboardShouldPersistTaps="handled"
+            style={styles.list}
+            ListEmptyComponent={hint ? <Text style={styles.hint}>{hint}</Text> : undefined}
+          />
         </View>
 
-        <TextField
-          label="Search by email"
-          placeholder="name@example.com"
-          value={term}
-          onChangeText={setTerm}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          returnKeyType="search"
-          containerStyle={styles.search}
-        />
-
-        {selectedList.length > 0 ? (
-          <View style={styles.chips}>
-            {selectedList.map(p => (
-              <Chip
-                key={p.id}
-                label={p.display_name ?? p.email}
-                selected
-                onPress={() => toggle(p)}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        {searchError ? (
-          <ErrorBanner
-            message={searchError.message}
-            kind={searchError.kind}
-            onDismiss={() => setSearchError(null)}
-          />
-        ) : null}
-
-        {searching ? (
-          <View style={styles.searching}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : null}
-
-        <FlatList
-          data={results}
-          keyExtractor={p => p.id}
-          renderItem={renderItem}
-          keyboardShouldPersistTaps="handled"
-          style={styles.list}
-          ListEmptyComponent={hint ? <Text style={styles.hint}>{hint}</Text> : undefined}
-        />
-
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
           {shareError ? <ErrorBanner message={shareError.message} kind={shareError.kind} /> : null}
           <Button
             title={selectedList.length > 0 ? `Share with ${selectedList.length}` : 'Share'}
+            icon="✅"
+            size="lg"
             onPress={submit}
             loading={sharing}
             disabled={selectedList.length === 0}
@@ -250,37 +261,52 @@ export function ShareModal({
 }
 
 const styles = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: colors.background, padding: spacing.lg },
+  sheet: { flex: 1, backgroundColor: colors.background },
+  body: { flex: 1, paddingHorizontal: spacing.lg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.md,
     marginBottom: spacing.lg,
   },
-  title: { ...typography.title },
-  close: { ...typography.body, color: colors.primary, fontWeight: '600' },
+  title: { ...typography.title, flex: 1 },
+  close: {
+    width: touch.min,
+    height: touch.min,
+    borderRadius: touch.min / 2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closePressed: { opacity: 0.85 },
+  closeText: { fontSize: 24, fontWeight: '700', color: colors.text },
   search: { marginBottom: spacing.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   searching: { paddingVertical: spacing.sm, alignItems: 'center' },
   list: { flex: 1 },
-  hint: { ...typography.caption, textAlign: 'center', paddingVertical: spacing.lg },
+  hint: { ...typography.body, color: colors.textMuted, textAlign: 'center', padding: spacing.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    minHeight: 64,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
+  rowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   rowPressed: { opacity: 0.85 },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',
@@ -288,9 +314,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
-  checkmark: { color: colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
+  checkmark: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '700' },
   rowText: { flex: 1 },
-  rowName: { ...typography.body },
+  rowName: { ...typography.bodyStrong },
   rowEmail: { ...typography.caption },
-  footer: { paddingTop: spacing.md },
+  footer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
 });

@@ -1,6 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { deleteKharcha, getKharcha } from '../api/kharcha';
 import { getProfilesByIds } from '../api/profiles';
 import { listSharesForKharcha, unshareKharcha } from '../api/shares';
@@ -10,9 +11,9 @@ import {
   Badge,
   Button,
   Card,
-  Divider,
   EmptyState,
   ErrorBanner,
+  IconCircle,
   InfoBanner,
   LoadingView,
 } from '../components/ui';
@@ -20,7 +21,16 @@ import { useAuth } from '../context/AuthProvider';
 import { AppError } from '../lib/errors';
 import { deleteReceipt } from '../lib/receipts';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, formatAmount, formatDate, spacing, typography } from '../theme';
+import {
+  colors,
+  formatAmount,
+  formatDateFriendly,
+  radius,
+  spacing,
+  touch,
+  typography,
+} from '../theme';
+import { getCategoryMeta } from '../theme/categories';
 import type { Kharcha, KharchaShareWithProfile, Profile } from '../types/models';
 
 type Props = RootStackScreenProps<'ExpenseDetail'>;
@@ -30,13 +40,14 @@ function displayName(profile: Profile | null | undefined): string {
 }
 
 /**
- * Read view for one expense. The owner-only action row (Share / Edit /
+ * Read view for one expense. The owner-only action row (Edit / Share /
  * Delete) is purely cosmetic: RLS on `kharcha`, `kharcha_shares` and the
  * `receipts` bucket rejects those calls from anyone but the owner.
  */
 export default function ExpenseDetailScreen({ navigation, route }: Props) {
   const { kharchaId } = route.params;
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [kharcha, setKharcha] = useState<Kharcha | null>(null);
   const [owner, setOwner] = useState<Profile | null>(null);
@@ -138,9 +149,10 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
   if (error && (error.kind === 'not_found' || error.kind === 'permission')) {
     return (
       <EmptyState
+        emoji="🔍"
         title="This expense isn't available"
         message="It may have been deleted or is no longer shared with you."
-        action={<Button title="Back" onPress={() => navigation.goBack()} />}
+        action={<Button title="Back" icon="↩️" size="lg" onPress={() => navigation.goBack()} />}
       />
     );
   }
@@ -153,10 +165,18 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
           kind={error?.kind}
           onRetry={load}
         />
-        <Button title="Back" variant="secondary" onPress={() => navigation.goBack()} />
+        <Button
+          title="Back"
+          icon="↩️"
+          size="lg"
+          variant="secondary"
+          onPress={() => navigation.goBack()}
+        />
       </View>
     );
   }
+
+  const meta = getCategoryMeta(kharcha.category);
 
   return (
     <View style={styles.flex}>
@@ -169,105 +189,120 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
             onDismiss={() => setActionError(null)}
           />
         ) : null}
-        {!isOwner ? <InfoBanner message="You have read-only access to this expense" /> : null}
 
         <Card style={styles.summary}>
-          <Text style={styles.amount} testID="detail-amount">
-            {formatAmount(kharcha.amount)}
-          </Text>
-          <View style={styles.metaRow}>
-            <Badge label={kharcha.category} tone="mine" />
-            {kharcha.visibility === 'shared' ? <Badge label="Shared" tone="shared" /> : null}
+          <IconCircle emoji={meta.emoji} bg={meta.bg} size={64} />
+          <View style={styles.summaryText}>
+            <Text
+              style={styles.amount}
+              testID="detail-amount"
+              adjustsFontSizeToFit
+              numberOfLines={1}
+            >
+              {formatAmount(kharcha.amount)}
+            </Text>
+            <Text style={styles.category} numberOfLines={1}>
+              {kharcha.category}
+            </Text>
+            <Text style={styles.date}>{formatDateFriendly(kharcha.expense_date)}</Text>
+            {kharcha.visibility === 'shared' ? (
+              <View style={styles.badgeRow}>
+                <Badge label="Shared" icon="👥" tone="shared" />
+              </View>
+            ) : null}
           </View>
-          <Text style={styles.date}>{formatDate(kharcha.expense_date)}</Text>
-          {kharcha.note ? (
-            <>
-              <Divider />
-              <Text style={styles.note}>{kharcha.note}</Text>
-            </>
-          ) : null}
         </Card>
+
+        {kharcha.note ? (
+          <Card style={styles.noteCard}>
+            <Text style={styles.noteIcon}>📝</Text>
+            <Text style={styles.note} testID="detail-note">
+              {kharcha.note}
+            </Text>
+          </Card>
+        ) : null}
 
         {kharcha.receipt_path ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Receipt</Text>
+            <Text style={styles.sectionTitle}>🧾 Receipt</Text>
             <ReceiptPreview path={kharcha.receipt_path} />
           </View>
         ) : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sharing</Text>
+          <Text style={styles.sectionTitle}>👥 Sharing</Text>
           {isOwner ? (
-            <Card>
+            <Card style={styles.shareCard}>
               <Text style={styles.body}>
                 {shares.length === 0
-                  ? 'Not shared with anyone yet.'
-                  : `Shared with ${shares.length} ${shares.length === 1 ? 'person' : 'people'}`}
+                  ? 'Not shared yet'
+                  : `👥 Shared with ${shares.length} ${shares.length === 1 ? 'person' : 'people'}`}
               </Text>
-              {shares.map(share => (
-                <View key={share.shared_with} style={styles.shareRow}>
-                  <View style={styles.shareText}>
-                    <Text style={styles.body} numberOfLines={1}>
-                      {displayName(share.profile)}
-                    </Text>
-                    {share.profile.display_name ? (
-                      <Text style={styles.caption} numberOfLines={1}>
-                        {share.profile.email}
+              {shares.map(share => {
+                const busy = removingShareId === share.shared_with;
+                return (
+                  <View key={share.shared_with} style={styles.shareRow}>
+                    <View style={styles.shareText}>
+                      <Text style={styles.bodyStrong} numberOfLines={1}>
+                        {displayName(share.profile)}
                       </Text>
-                    ) : null}
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${displayName(share.profile)}`}
-                    disabled={removingShareId !== null}
-                    onPress={() => removeShare(share)}
-                    hitSlop={8}
-                  >
-                    <Text
-                      style={[
-                        styles.removeText,
-                        removingShareId === share.shared_with && styles.removeTextBusy,
+                      {share.profile.display_name ? (
+                        <Text style={styles.caption} numberOfLines={1}>
+                          {share.profile.email}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${displayName(share.profile)}`}
+                      accessibilityState={{ disabled: removingShareId !== null, busy }}
+                      disabled={removingShareId !== null}
+                      onPress={() => removeShare(share)}
+                      style={({ pressed }) => [
+                        styles.removeButton,
+                        (pressed || removingShareId !== null) && styles.removeButtonDim,
                       ]}
                     >
-                      {removingShareId === share.shared_with ? 'Removing…' : 'Remove'}
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
+                      <Text style={styles.removeText}>{busy ? '…' : '🗑️ Remove'}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </Card>
           ) : (
-            <Card>
-              <Text style={styles.body}>Shared with you by {displayName(owner)}</Text>
-            </Card>
+            <InfoBanner icon="👥" message={`Shared with you by ${displayName(owner)}`} />
           )}
         </View>
-
-        {isOwner ? (
-          <View style={styles.actions}>
-            <Button
-              title="Share"
-              variant="secondary"
-              onPress={() => setShareVisible(true)}
-              disabled={deleting}
-              style={styles.actionButton}
-            />
-            <Button
-              title="Edit"
-              variant="secondary"
-              onPress={() => navigation.navigate('ExpenseForm', { kharchaId: kharcha.id })}
-              disabled={deleting}
-              style={styles.actionButton}
-            />
-            <Button
-              title="Delete"
-              variant="danger"
-              onPress={confirmDelete}
-              loading={deleting}
-              style={styles.actionButton}
-            />
-          </View>
-        ) : null}
       </ScrollView>
+
+      {isOwner ? (
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+          <Button
+            title="Edit"
+            icon="✏️"
+            variant="secondary"
+            onPress={() => navigation.navigate('ExpenseForm', { kharchaId: kharcha.id })}
+            disabled={deleting}
+            style={styles.footerButton}
+          />
+          <Button
+            title="Share"
+            icon="👥"
+            variant="secondary"
+            onPress={() => setShareVisible(true)}
+            disabled={deleting}
+            style={styles.footerButton}
+          />
+          <Button
+            title="Delete"
+            icon="🗑️"
+            variant="danger"
+            onPress={confirmDelete}
+            loading={deleting}
+            style={styles.footerButton}
+          />
+        </View>
+      ) : null}
 
       {isOwner ? (
         <ShareModal
@@ -288,25 +323,51 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   centered: { flex: 1, padding: spacing.lg, justifyContent: 'center', gap: spacing.md },
-  summary: { gap: spacing.sm },
-  amount: { ...typography.amount, fontSize: 32 },
-  metaRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  summaryText: { flex: 1, gap: spacing.xs },
+  amount: { ...typography.display },
+  category: { ...typography.bodyStrong },
   date: { ...typography.caption },
-  note: { ...typography.body },
+  badgeRow: { flexDirection: 'row', marginTop: spacing.xs },
+  noteCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  noteIcon: { fontSize: 24 },
+  note: { ...typography.body, flex: 1 },
   section: { gap: spacing.sm },
   sectionTitle: { ...typography.label },
+  shareCard: { gap: spacing.sm },
   body: { ...typography.body },
+  bodyStrong: { ...typography.bodyStrong },
   caption: { ...typography.caption },
   shareRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    paddingTop: spacing.md,
+    minHeight: touch.min,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
   },
   shareText: { flex: 1 },
-  removeText: { ...typography.label, color: colors.danger },
-  removeTextBusy: { opacity: 0.5 },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  actionButton: { flex: 1, paddingHorizontal: spacing.sm },
+  removeButton: {
+    minHeight: touch.min,
+    minWidth: touch.min,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeButtonDim: { opacity: 0.6 },
+  removeText: { ...typography.button, color: colors.danger, fontSize: 16 },
+  footer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  footerButton: { flex: 1, minHeight: touch.min, paddingHorizontal: spacing.sm },
 });
