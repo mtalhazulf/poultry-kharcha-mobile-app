@@ -4,12 +4,9 @@
 
     <!-- Receipt capture (react-native-image-picker launchCamera). Runtime-requested. -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Receipt selection from the gallery. READ_MEDIA_IMAGES is the API 33+
-         permission; READ_EXTERNAL_STORAGE covers API 24-32 only. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <!-- Gallery selection goes through the Android Photo Picker, which needs
+         no storage permission (and keeps us out of Play's photo/video
+         permission policy). -->
 
     <!-- The app still works (gallery only) on devices without a camera. -->
     <uses-feature

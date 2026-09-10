@@ -9,6 +9,8 @@ receipt, and share individual expenses read-only with other users by email.
 - Backend: Supabase project `ikiepqpfhmdprqezrbgq`
   (`https://ikiepqpfhmdprqezrbgq.supabase.co`)
 
+> **Publishing:** see `docs/PLAY_STORE.md` (Play Console checklist, signing, store assets in `store/`).
+>
 > **Internal app.** Sign-up is invite-only: an admin adds staff emails in
 > **Settings → Staff**; the database rejects everyone else (email *and*
 > Google). The first account created becomes the admin — do that immediately

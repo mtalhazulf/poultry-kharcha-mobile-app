@@ -98,10 +98,22 @@ jobs:
       - name: Build release APK
         run: bun run apk:release
 
+      # Google Play only accepts App Bundles; the APK above is for sideloading
+      # and the emulator smoke run.
+      - name: Build release AAB (Play upload)
+        run: bun run bundle:release
+
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-${{ github.sha }}
           path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-bundle-${{ github.sha }}
+          path: android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 30
 
