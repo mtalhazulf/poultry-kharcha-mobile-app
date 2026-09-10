@@ -1,6 +1,7 @@
 /**
- * Small set of shared primitives so every screen looks the same. Screens
- * compose these rather than styling raw RN views for buttons/inputs/errors.
+ * Shared primitives. Every control is at least 56dp tall, text is 18px, and
+ * anything a user must recognise carries an icon — the audience may not read
+ * fluently, so shape, colour and icon do the work that labels usually do.
  */
 import React from 'react';
 import {
@@ -15,7 +16,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, spacing, touch, typography } from '../theme';
 import type { AppErrorKind } from '../lib/errors';
 
 // --- Button -----------------------------------------------------------------
@@ -24,19 +25,23 @@ type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   title: string;
+  /** Emoji or short glyph shown before the title. */
+  icon?: string;
   variant?: ButtonVariant;
   loading?: boolean;
+  /** `lg` is the single primary action of a screen. */
+  size?: 'md' | 'lg';
   style?: StyleProp<ViewStyle>;
-  left?: React.ReactNode;
 }
 
 export function Button({
   title,
+  icon,
   variant = 'primary',
   loading = false,
+  size = 'md',
   disabled,
   style,
-  left,
   ...rest
 }: ButtonProps) {
   const isDisabled = disabled || loading;
@@ -54,6 +59,7 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         buttonVariants[variant],
+        size === 'lg' && styles.buttonLg,
         pressed && styles.buttonPressed,
         isDisabled && styles.buttonDisabled,
         style,
@@ -64,8 +70,14 @@ export function Button({
         <ActivityIndicator color={textColor} />
       ) : (
         <View style={styles.buttonContent}>
-          {left}
-          <Text style={[styles.buttonText, { color: textColor }]}>{title}</Text>
+          {icon ? (
+            <Text style={[styles.buttonIcon, size === 'lg' && styles.buttonIconLg]}>{icon}</Text>
+          ) : null}
+          <Text
+            style={[styles.buttonText, size === 'lg' && styles.buttonTextLg, { color: textColor }]}
+          >
+            {title}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -76,25 +88,101 @@ export function Button({
 
 interface TextFieldProps extends TextInputProps {
   label?: string;
+  /** Emoji shown inside the field, left of the text. */
+  icon?: string;
   error?: string | null;
   hint?: string;
   containerStyle?: StyleProp<ViewStyle>;
 }
 
-export function TextField({ label, error, hint, containerStyle, style, ...rest }: TextFieldProps) {
+export function TextField({
+  label,
+  icon,
+  error,
+  hint,
+  containerStyle,
+  style,
+  ...rest
+}: TextFieldProps) {
   return (
     <View style={[styles.field, containerStyle]}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <TextInput
-        placeholderTextColor={colors.textMuted}
-        style={[styles.input, error ? styles.inputError : null, style]}
-        {...rest}
-      />
+      <View style={[styles.inputWrap, error ? styles.inputError : null]}>
+        {icon ? <Text style={styles.inputIcon}>{icon}</Text> : null}
+        <TextInput
+          placeholderTextColor={colors.textMuted}
+          style={[styles.input, style]}
+          {...rest}
+        />
+      </View>
       {error ? (
         <Text style={styles.fieldError}>{error}</Text>
       ) : hint ? (
         <Text style={styles.fieldHint}>{hint}</Text>
       ) : null}
+    </View>
+  );
+}
+
+// --- Segmented control ------------------------------------------------------
+
+export interface SegmentOption<T extends string> {
+  value: T;
+  label: string;
+  icon?: string;
+}
+
+/** Two or three big mutually-exclusive choices, e.g. All / Mine / Shared. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  style,
+}: {
+  options: ReadonlyArray<SegmentOption<T>>;
+  value: T;
+  onChange: (next: T) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.segmented, style]} accessibilityRole="tablist">
+      {options.map(option => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.value)}
+            style={[styles.segment, selected && styles.segmentSelected]}
+            testID={`segment-${option.value}`}
+          >
+            <Text
+              style={[styles.segmentText, selected && styles.segmentTextSelected]}
+              numberOfLines={1}
+            >
+              {option.icon ? `${option.icon} ` : ''}
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// --- Icon circle ------------------------------------------------------------
+
+export function IconCircle({ emoji, bg, size = 48 }: { emoji: string; bg: string; size?: number }) {
+  return (
+    <View
+      style={[
+        styles.iconCircle,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
+      ]}
+      accessible={false}
+    >
+      <Text style={{ fontSize: size * 0.5 }}>{emoji}</Text>
     </View>
   );
 }
@@ -113,20 +201,22 @@ export function ErrorBanner({ message, kind, onRetry, onDismiss, style }: ErrorB
   if (!message) {
     return null;
   }
-  const soft = kind === 'network' ? colors.warningSoft : colors.dangerSoft;
-  const strong = kind === 'network' ? colors.warning : colors.danger;
+  const isNetwork = kind === 'network';
+  const soft = isNetwork ? colors.warningSoft : colors.dangerSoft;
+  const strong = isNetwork ? colors.warning : colors.danger;
   return (
     <View accessibilityRole="alert" style={[styles.banner, { backgroundColor: soft }, style]}>
+      <Text style={styles.bannerIcon}>{isNetwork ? '📶' : '⚠️'}</Text>
       <Text style={[styles.bannerText, { color: strong }]}>{message}</Text>
       <View style={styles.bannerActions}>
         {onRetry ? (
-          <Pressable onPress={onRetry} hitSlop={8}>
+          <Pressable onPress={onRetry} hitSlop={8} accessibilityRole="button">
             <Text style={[styles.bannerAction, { color: strong }]}>Retry</Text>
           </Pressable>
         ) : null}
         {onDismiss ? (
-          <Pressable onPress={onDismiss} hitSlop={8}>
-            <Text style={[styles.bannerAction, { color: strong }]}>Dismiss</Text>
+          <Pressable onPress={onDismiss} hitSlop={8} accessibilityRole="button">
+            <Text style={[styles.bannerAction, { color: strong }]}>✕</Text>
           </Pressable>
         ) : null}
       </View>
@@ -136,10 +226,12 @@ export function ErrorBanner({ message, kind, onRetry, onDismiss, style }: ErrorB
 
 export function InfoBanner({
   message,
+  icon,
   tone = 'info',
   style,
 }: {
   message: string;
+  icon?: string;
   tone?: 'info' | 'warning';
   style?: StyleProp<ViewStyle>;
 }) {
@@ -147,6 +239,7 @@ export function InfoBanner({
   const fg = tone === 'warning' ? colors.warning : colors.shared;
   return (
     <View style={[styles.banner, { backgroundColor: bg }, style]}>
+      <Text style={styles.bannerIcon}>{icon ?? (tone === 'warning' ? '⚠️' : 'ℹ️')}</Text>
       <Text style={[styles.bannerText, { color: fg }]}>{message}</Text>
     </View>
   );
@@ -162,16 +255,19 @@ export function LoadingView({ message }: { message?: string }) {
 }
 
 export function EmptyState({
+  emoji = '🗒️',
   title,
   message,
   action,
 }: {
+  emoji?: string;
   title: string;
   message?: string;
   action?: React.ReactNode;
 }) {
   return (
     <View style={styles.center}>
+      <Text style={styles.emptyEmoji}>{emoji}</Text>
       <Text style={styles.emptyTitle}>{title}</Text>
       {message ? <Text style={styles.centerText}>{message}</Text> : null}
       {action ? <View style={styles.emptyAction}>{action}</View> : null}
@@ -183,7 +279,15 @@ export function EmptyState({
 
 type BadgeTone = 'shared' | 'mine' | 'neutral' | 'danger';
 
-export function Badge({ label, tone = 'neutral' }: { label: string; tone?: BadgeTone }) {
+export function Badge({
+  label,
+  icon,
+  tone = 'neutral',
+}: {
+  label: string;
+  icon?: string;
+  tone?: BadgeTone;
+}) {
   const palette: Record<BadgeTone, { bg: string; fg: string }> = {
     shared: { bg: colors.sharedSoft, fg: colors.shared },
     mine: { bg: colors.primarySoft, fg: colors.primary },
@@ -193,19 +297,24 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Badge
   const p = palette[tone];
   return (
     <View style={[styles.badge, { backgroundColor: p.bg }]}>
-      <Text style={[styles.badgeText, { color: p.fg }]}>{label}</Text>
+      <Text style={[styles.badgeText, { color: p.fg }]}>
+        {icon ? `${icon} ` : ''}
+        {label}
+      </Text>
     </View>
   );
 }
 
 export function Chip({
   label,
+  icon,
   selected,
   onPress,
   style,
   testID,
 }: {
   label: string;
+  icon?: string;
   selected: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
@@ -219,7 +328,10 @@ export function Chip({
       testID={testID}
       style={[styles.chip, selected && styles.chipSelected, style]}
     >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+        {icon ? `${icon} ` : ''}
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -249,32 +361,60 @@ const buttonVariants = StyleSheet.create({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 48,
+    minHeight: touch.min,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonLg: { minHeight: 64, borderRadius: radius.lg },
   buttonContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  buttonIcon: { fontSize: 20 },
+  buttonIconLg: { fontSize: 24 },
   buttonPressed: { opacity: 0.85 },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { fontSize: 16, fontWeight: '600' },
+  buttonDisabled: { opacity: 0.45 },
+  buttonText: { ...typography.button },
+  buttonTextLg: { fontSize: 20 },
 
   field: { marginBottom: spacing.lg },
-  fieldLabel: { ...typography.label, marginBottom: spacing.xs },
-  input: {
-    minHeight: 48,
-    borderWidth: 1,
+  fieldLabel: { ...typography.label, marginBottom: spacing.sm },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: touch.min,
+    borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
-    color: colors.text,
-    fontSize: 16,
+    gap: spacing.sm,
   },
+  inputIcon: { fontSize: 22 },
+  input: { flex: 1, minHeight: touch.min, color: colors.text, fontSize: 18, paddingVertical: 0 },
   inputError: { borderColor: colors.danger },
   fieldError: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
   fieldHint: { ...typography.caption, marginTop: spacing.xs },
+
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: colors.border,
+    borderRadius: radius.md,
+    padding: 4,
+    gap: 4,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: radius.sm + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  segmentSelected: { backgroundColor: colors.surface, ...{ elevation: 1 } },
+  segmentText: { fontSize: 16, fontWeight: '600', color: colors.textMuted },
+  segmentTextSelected: { color: colors.text },
+
+  iconCircle: { alignItems: 'center', justifyContent: 'center' },
 
   banner: {
     borderRadius: radius.md,
@@ -282,12 +422,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  bannerText: { flex: 1, fontSize: 14 },
-  bannerActions: { flexDirection: 'row', gap: spacing.md },
-  bannerAction: { fontSize: 14, fontWeight: '600' },
+  bannerIcon: { fontSize: 18 },
+  bannerText: { flex: 1, fontSize: 16, fontWeight: '500' },
+  bannerActions: { flexDirection: 'row', gap: spacing.lg },
+  bannerAction: { fontSize: 16, fontWeight: '700' },
 
   center: {
     flex: 1,
@@ -297,28 +437,30 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   centerText: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
+  emptyEmoji: { fontSize: 56, marginBottom: spacing.sm },
   emptyTitle: { ...typography.heading, textAlign: 'center' },
-  emptyAction: { marginTop: spacing.md },
+  emptyAction: { marginTop: spacing.lg, alignSelf: 'stretch' },
 
   badge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 3,
     borderRadius: radius.pill,
     alignSelf: 'flex-start',
   },
-  badgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  badgeText: { fontSize: 13, fontWeight: '700' },
 
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 14, color: colors.text },
-  chipTextSelected: { color: colors.textOnPrimary, fontWeight: '600' },
+  chipText: { fontSize: 16, color: colors.text, fontWeight: '500' },
+  chipTextSelected: { color: colors.textOnPrimary, fontWeight: '700' },
 
   card: {
     backgroundColor: colors.surface,

@@ -40,8 +40,14 @@ function SignOutButton() {
     ]);
   }, [signOut]);
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8} style={styles.headerButton}>
-      <Text style={styles.headerButtonText}>Sign out</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Sign out"
+      onPress={onPress}
+      hitSlop={8}
+      style={styles.headerButton}
+    >
+      <Text style={styles.headerButtonText}>🚪 Sign out</Text>
     </Pressable>
   );
 }
@@ -60,7 +66,8 @@ export default function RootNavigator() {
       <Stack.Navigator
         screenOptions={{
           headerTintColor: colors.primary,
-          headerTitleStyle: { fontWeight: '700' },
+          headerTitleStyle: { fontWeight: '800', fontSize: 22, color: colors.text },
+          headerBackButtonDisplayMode: 'minimal',
           headerStyle: { backgroundColor: colors.surface },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.background },
@@ -71,29 +78,25 @@ export default function RootNavigator() {
             <Stack.Screen
               name="Dashboard"
               component={DashboardScreen}
-              options={{ title: 'Kharcha', headerRight: renderSignOut }}
+              options={{ title: '💰 Kharcha', headerRight: renderSignOut }}
             />
             <Stack.Screen
               name="ExpenseForm"
               component={ExpenseFormScreen}
               options={({ route }) => ({
-                title: route.params?.kharchaId ? 'Edit expense' : 'Add expense',
+                title: route.params?.kharchaId ? 'Edit' : 'Add',
               })}
             />
             <Stack.Screen
               name="ExpenseDetail"
               component={ExpenseDetailScreen}
-              options={{ title: 'Expense' }}
+              options={{ title: 'Details' }}
             />
           </>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="SignUp"
-              component={SignUpScreen}
-              options={{ title: 'Create account' }}
-            />
+            <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: '' }} />
           </>
         )}
       </Stack.Navigator>
@@ -102,6 +105,10 @@ export default function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
-  headerButton: { paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
-  headerButtonText: { color: colors.primary, fontSize: 16, fontWeight: '600' },
+  headerButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  headerButtonText: { color: colors.primary, fontSize: 16, fontWeight: '700' },
 });

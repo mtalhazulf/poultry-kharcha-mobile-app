@@ -48,3 +48,25 @@ describe('toIsoDate', () => {
     expect(formatDate(toIsoDate(new Date(2026, 2, 7)))).toBe('7 Mar 2026');
   });
 });
+
+describe('formatAmountShort', () => {
+  const { formatAmountShort } = require('../src/theme') as typeof import('../src/theme');
+  it('drops decimals and groups thousands', () => {
+    expect(formatAmountShort(12500.49)).toBe('PKR 12,500');
+    expect(formatAmountShort(999.5)).toBe('PKR 1,000');
+    expect(formatAmountShort(-42)).toBe('-PKR 42');
+  });
+});
+
+describe('formatDateFriendly', () => {
+  const { formatDateFriendly } = require('../src/theme') as typeof import('../src/theme');
+  const now = new Date(2026, 8, 10); // 10 Sep 2026, local time
+  it('says Today / Yesterday', () => {
+    expect(formatDateFriendly('2026-09-10', now)).toBe('Today');
+    expect(formatDateFriendly('2026-09-09', now)).toBe('Yesterday');
+  });
+  it('omits the year inside the current year and keeps it otherwise', () => {
+    expect(formatDateFriendly('2026-03-02', now)).toBe('2 Mar');
+    expect(formatDateFriendly('2025-12-31', now)).toBe('31 Dec 2025');
+  });
+});
