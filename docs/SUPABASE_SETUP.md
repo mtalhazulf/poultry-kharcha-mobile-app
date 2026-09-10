@@ -111,7 +111,7 @@ Authentication -> Providers:
    tokens issued to any listed client, which is what makes device-issued
    tokens acceptable.
    - Google Cloud side: create the Web client; create an Android client
-     with package `com.kharcha.app` and the SHA-1 of each signing key
+     with package `com.mps.expensetracker` and the SHA-1 of each signing key
      (debug + release). See the README for the `keytool` command.
    - Set the OAuth consent screen to *External* with test users while in
      testing mode.

@@ -1,7 +1,7 @@
 # End-to-end smoke run against the live Supabase project.
 #   maestro test .maestro/smoke.yaml -e EMAIL=... -e PASSWORD=...
 # Screenshots land in the current working directory.
-appId: com.kharcha.app
+appId: com.mps.expensetracker
 ---
 - launchApp:
     clearState: true

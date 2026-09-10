@@ -4,7 +4,7 @@ Kharcha ("expense" in Urdu/Hindi) is an Android expense tracker built with
 React Native and Supabase. Record what you spent, attach a photo of the
 receipt, and share individual expenses read-only with other users by email.
 
-- Package name: `com.kharcha.app`
+- Package name: `com.mps.expensetracker`
 - Platform: Android only (no iOS project is checked in)
 - Backend: Supabase project `ikiepqpfhmdprqezrbgq`
   (`https://ikiepqpfhmdprqezrbgq.supabase.co`)
@@ -69,7 +69,7 @@ providers and redirect URLs, follow [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP
    OAuth 2.0 client IDs:
    - **Web application** — its client ID goes into `GOOGLE_WEB_CLIENT_ID` in
      `.env` and (with its secret) into the Supabase Google provider.
-   - **Android** — package name `com.kharcha.app` plus the SHA-1 of the
+   - **Android** — package name `com.mps.expensetracker` plus the SHA-1 of the
      signing certificate. For debug builds:
 
      ```sh
@@ -172,7 +172,7 @@ never for distribution.
 
   ```sh
   adb shell am start -W -a android.intent.action.VIEW \
-    -d "kharcha://auth/callback?code=test" com.kharcha.app
+    -d "kharcha://auth/callback?code=test" com.mps.expensetracker
   ```
 
   It must open Kharcha (not "Activity not started"). Then make sure

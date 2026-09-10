@@ -18,7 +18,7 @@ a public listing and the Data-safety questionnaire.
 | Privacy policy text | `docs/PRIVACY.md` (host it at a public URL) |
 | Release signing hook | `android/app/build.gradle` reads `android/keystore.properties`; CI reads the `ANDROID_KEYSTORE_BASE64` secret |
 | Permissions | `INTERNET`, `CAMERA` only (Photo Picker needs none) |
-| `applicationId` | `com.kharcha.app` — **cannot be changed after the first upload** |
+| `applicationId` | `com.mps.expensetracker` — **cannot be changed after the first upload** |
 | `targetSdkVersion` | 36 (meets Play's current requirement) |
 
 ## What only you can provide

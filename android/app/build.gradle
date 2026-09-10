@@ -107,9 +107,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.kharcha.app"
+    namespace "com.mps.expensetracker"
     defaultConfig {
-        applicationId "com.kharcha.app"
+        applicationId "com.mps.expensetracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Overridable from CI: -PversionCode=42 -PversionName=1.2.0 (see the
@@ -117,7 +117,7 @@ android {
         versionCode (project.hasProperty("versionCode") ? project.property("versionCode").toInteger() : 1)
         versionName (project.hasProperty("versionName") ? project.property("versionName") : "1.0")
         // Tells react-native-config which package holds BuildConfig (== namespace).
-        resValue "string", "build_config_package", "com.kharcha.app"
+        resValue "string", "build_config_package", "com.mps.expensetracker"
     }
     signingConfigs {
         debug {

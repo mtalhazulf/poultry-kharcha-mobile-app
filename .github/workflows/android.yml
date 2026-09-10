@@ -260,7 +260,7 @@ jobs:
         if: env.PLAY_SERVICE_ACCOUNT_JSON != ''
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.kharcha.app
+          packageName: com.mps.expensetracker
           releaseFiles: bundle/*.aab
           track: internal
           status: completed

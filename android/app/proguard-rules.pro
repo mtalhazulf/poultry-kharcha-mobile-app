@@ -11,7 +11,7 @@
 
 # --- react-native-config -----------------------------------------------------
 # Reads BuildConfig (in the namespace package) by reflection.
--keep class com.kharcha.app.BuildConfig { *; }
+-keep class com.mps.expensetracker.BuildConfig { *; }
 
 # --- @react-native-google-signin/google-signin (Google Play Services) --------
 -keep class com.google.android.gms.** { *; }

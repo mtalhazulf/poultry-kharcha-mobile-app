@@ -1,4 +1,4 @@
-package com.kharcha.app
+package com.mps.expensetracker
 
 import android.app.Application
 import com.facebook.react.PackageList
