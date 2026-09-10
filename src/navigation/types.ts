@@ -8,6 +8,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
+  /** First-run tour; `replay` when opened from the Help button. */
+  Walkthrough: { replay?: boolean } | undefined;
   Dashboard: undefined;
   /** Omit `kharchaId` to create; pass it to edit (owner only). */
   ExpenseForm: { kharchaId?: string } | undefined;

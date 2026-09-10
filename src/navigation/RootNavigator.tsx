@@ -1,15 +1,17 @@
-import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
+import { NavigationContainer, useNavigation, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useCallback } from 'react';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LoadingView } from '../components/ui';
 import { useAuth } from '../context/AuthProvider';
 import { AppError } from '../lib/errors';
+import { hasSeenWalkthrough } from '../lib/walkthrough';
 import DashboardScreen from '../screens/DashboardScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import ExpenseFormScreen from '../screens/ExpenseFormScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
+import WalkthroughScreen from '../screens/WalkthroughScreen';
 import { colors, spacing } from '../theme';
 import type { RootStackParamList } from './types';
 
@@ -52,12 +54,51 @@ function SignOutButton() {
   );
 }
 
-const renderSignOut = () => <SignOutButton />;
+function HelpButton() {
+  const navigation = useNavigation();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Help"
+      onPress={() => navigation.navigate('Walkthrough', { replay: true })}
+      hitSlop={8}
+      style={styles.headerButton}
+      testID="dashboard-help"
+    >
+      <Text style={styles.headerButtonText}>❓ Help</Text>
+    </Pressable>
+  );
+}
+
+const renderDashboardRight = () => (
+  <View style={styles.headerRight}>
+    <HelpButton />
+    <SignOutButton />
+  </View>
+);
+
+/** null while the flag is still being read from AsyncStorage. */
+function useWalkthroughSeen(): boolean | null {
+  const [seen, setSeen] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    hasSeenWalkthrough().then(value => {
+      if (!cancelled) {
+        setSeen(value);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return seen;
+}
 
 export default function RootNavigator() {
   const { session, initializing } = useAuth();
+  const walkthroughSeen = useWalkthroughSeen();
 
-  if (initializing) {
+  if (initializing || walkthroughSeen === null) {
     return <LoadingView />;
   }
 
@@ -75,11 +116,25 @@ export default function RootNavigator() {
       >
         {session ? (
           <>
+            {walkthroughSeen ? null : (
+              <Stack.Screen
+                name="Walkthrough"
+                component={WalkthroughScreen}
+                options={{ headerShown: false }}
+              />
+            )}
             <Stack.Screen
               name="Dashboard"
               component={DashboardScreen}
-              options={{ title: '💰 Kharcha', headerRight: renderSignOut }}
+              options={{ title: '💰 Kharcha', headerRight: renderDashboardRight }}
             />
+            {walkthroughSeen ? (
+              <Stack.Screen
+                name="Walkthrough"
+                component={WalkthroughScreen}
+                options={{ headerShown: false, presentation: 'modal' }}
+              />
+            ) : null}
             <Stack.Screen
               name="ExpenseForm"
               component={ExpenseFormScreen}
@@ -111,4 +166,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   headerButtonText: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });

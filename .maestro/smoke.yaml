@@ -20,10 +20,30 @@ appId: com.kharcha.app
 - hideKeyboard
 - tapOn:
     id: "login-submit"
+
+# First run on this device: the walkthrough shows before the dashboard
+- extendedWaitUntil:
+    visible: "Welcome to Kharcha"
+    timeout: 45000
+- takeScreenshot: 02-walkthrough-1
+- tapOn:
+    id: "walkthrough-next"
+- assertVisible: "Add an expense"
+- takeScreenshot: 02-walkthrough-2
+- tapOn:
+    id: "walkthrough-next"
+- assertVisible: "Keep the bill"
+- tapOn:
+    id: "walkthrough-next"
+- assertVisible: "Share with family"
+- takeScreenshot: 02-walkthrough-4
+- tapOn:
+    id: "walkthrough-next"
+
 - extendedWaitUntil:
     visible: "This month"
     timeout: 45000
-- takeScreenshot: 02-dashboard
+- takeScreenshot: 03-dashboard
 
 # Create an expense
 - tapOn:
@@ -40,7 +60,7 @@ appId: com.kharcha.app
     id: "form-note"
 - inputText: "Biryani for the team"
 - hideKeyboard
-- takeScreenshot: 03-form-filled
+- takeScreenshot: 04-form-filled
 - tapOn:
     id: "form-submit"
 
@@ -51,11 +71,11 @@ appId: com.kharcha.app
     timeout: 45000
 - assertVisible: "PKR 1,250.50"
 - assertVisible: "Biryani for the team"
-- takeScreenshot: 04-detail
+- takeScreenshot: 05-detail
 
 # Back to the dashboard: the new row must be listed (RLS-scoped query + realtime)
 - back
 - extendedWaitUntil:
     visible: "Biryani for the team"
     timeout: 20000
-- takeScreenshot: 05-dashboard-with-expense
+- takeScreenshot: 06-dashboard-with-expense
