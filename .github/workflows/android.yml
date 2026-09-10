@@ -192,6 +192,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -q --orphan ci-screenshots
           git rm -rfq . >/dev/null 2>&1 || true
+          git clean -fdxq   # drop untracked build inputs (apk/, maestro-debug/, …)
           cp -r "$staging"/. .
           {
             echo "# Smoke-run screenshots"

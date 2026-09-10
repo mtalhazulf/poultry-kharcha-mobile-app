@@ -5,6 +5,10 @@ appId: com.kharcha.app
 ---
 - launchApp:
     clearState: true
+# If an "isn't responding" system dialog is still showing, wait it out.
+- tapOn:
+    text: "Wait"
+    optional: true
 - extendedWaitUntil:
     visible: "Kharcha"
     timeout: 60000
