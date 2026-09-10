@@ -111,6 +111,8 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write # publishes screenshots to the ci-screenshots branch
     env:
       # Throwaway demo account seeded in the Supabase project; override with
       # repo secrets to point at a different user/project.
@@ -166,4 +168,33 @@ jobs:
             screenshots/*.png
             maestro-debug/**
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 30
+
+      # Artifacts need a browser session to download; a branch can be fetched
+      # from anywhere with git. Orphan branch, force-pushed, one commit per run.
+      - name: Publish screenshots to the ci-screenshots branch
+        if: always()
+        run: |
+          if ! ls screenshots/*.png >/dev/null 2>&1; then
+            echo "No screenshots to publish"
+            exit 0
+          fi
+          staging="$(mktemp -d)"
+          cp screenshots/*.png "$staging"/
+          [ -d maestro-debug ] && cp -r maestro-debug "$staging"/ || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan ci-screenshots
+          git rm -rfq . >/dev/null 2>&1 || true
+          cp -r "$staging"/. .
+          {
+            echo "# Smoke-run screenshots"
+            echo
+            echo "- Source commit: \`${GITHUB_SHA}\` on \`${GITHUB_REF_NAME}\`"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Result: ${{ job.status }}"
+          } > README.md
+          git add -A
+          git commit -qm "Smoke screenshots for ${GITHUB_SHA} (${{ job.status }})"
+          git push -f origin ci-screenshots

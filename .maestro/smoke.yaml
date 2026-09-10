@@ -54,8 +54,16 @@ appId: com.kharcha.app
 - tapOn:
     id: "form-amount"
 - inputText: "1250.50"
+- hideKeyboard
+- takeScreenshot: 04-form-amount
 - tapOn:
     id: "category-Food"
+# The note field sits below the category grid; scroll it into view first.
+- scrollUntilVisible:
+    element:
+      id: "form-note"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     id: "form-note"
 - inputText: "Biryani for the team"
