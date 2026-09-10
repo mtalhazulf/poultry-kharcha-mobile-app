@@ -14,6 +14,7 @@ export type RootStackParamList = {
   /** Omit `kharchaId` to create; pass it to edit (owner only). */
   ExpenseForm: { kharchaId?: string } | undefined;
   ExpenseDetail: { kharchaId: string };
+  Settings: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

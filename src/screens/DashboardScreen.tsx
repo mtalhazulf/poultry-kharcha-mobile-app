@@ -159,7 +159,7 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
           ]}
         >
           <Text style={styles.filterIcon} accessible={false}>
-            ⚙️
+            🔍
           </Text>
           {advancedCount > 0 ? (
             <View style={styles.filterDot} accessible={false}>

@@ -1,15 +1,15 @@
 import { NavigationContainer, useNavigation, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LoadingView } from '../components/ui';
 import { useAuth } from '../context/AuthProvider';
-import { AppError } from '../lib/errors';
 import { hasSeenWalkthrough } from '../lib/walkthrough';
 import DashboardScreen from '../screens/DashboardScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import ExpenseFormScreen from '../screens/ExpenseFormScreen';
 import LoginScreen from '../screens/LoginScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import WalkthroughScreen from '../screens/WalkthroughScreen';
 import { colors, spacing } from '../theme';
@@ -24,35 +24,6 @@ const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['kharcha://'],
   config: { screens: {} },
 };
-
-function SignOutButton() {
-  const { signOut } = useAuth();
-  const onPress = useCallback(() => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: () => {
-          signOut().catch(err => {
-            Alert.alert('Could not sign out', AppError.from(err).message);
-          });
-        },
-      },
-    ]);
-  }, [signOut]);
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Sign out"
-      onPress={onPress}
-      hitSlop={8}
-      style={styles.headerButton}
-    >
-      <Text style={styles.headerButtonText}>🚪 Sign out</Text>
-    </Pressable>
-  );
-}
 
 function HelpButton() {
   const navigation = useNavigation();
@@ -70,10 +41,27 @@ function HelpButton() {
   );
 }
 
+/** Sign-out lives inside Settings now, so the header stays to two buttons. */
+function SettingsButton() {
+  const navigation = useNavigation();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Settings"
+      onPress={() => navigation.navigate('Settings')}
+      hitSlop={8}
+      style={[styles.headerButton, styles.headerIconButton]}
+      testID="open-settings"
+    >
+      <Text style={styles.headerIcon}>⚙️</Text>
+    </Pressable>
+  );
+}
+
 const renderDashboardRight = () => (
   <View style={styles.headerRight}>
     <HelpButton />
-    <SignOutButton />
+    <SettingsButton />
   </View>
 );
 
@@ -147,6 +135,11 @@ export default function RootNavigator() {
               component={ExpenseDetailScreen}
               options={{ title: 'Details' }}
             />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ title: '⚙️ Settings' }}
+            />
           </>
         ) : (
           <>
@@ -166,5 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   headerButtonText: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  headerIconButton: { minWidth: 44, alignItems: 'center' },
+  headerIcon: { fontSize: 22 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });

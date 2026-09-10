@@ -51,8 +51,14 @@ export const WALKTHROUGH_SLIDES: readonly WalkthroughSlide[] = [
   },
   {
     emoji: '👥',
-    title: 'Share with family',
-    text: 'Share an expense using their email.\nThey can see it, not change it.',
+    title: 'Share with a colleague',
+    text: 'Share an expense with a colleague.\nThey can see it, not change it.',
     bg: '#F3E3FF',
+  },
+  {
+    emoji: '⚙️',
+    title: 'Settings',
+    text: 'Expense types and staff are managed\nin Settings by your admin.',
+    bg: '#ECEEF1',
   },
 ];

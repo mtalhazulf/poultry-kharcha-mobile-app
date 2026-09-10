@@ -106,3 +106,16 @@ appId: com.kharcha.app
     timeout: 30000
 - assertNotVisible: "Biryani for the team"
 - takeScreenshot: 07-dashboard-after-delete
+
+# Settings: the demo account is a member, so this shows the read-only
+# expense-type list plus Help / Sign out.
+- tapOn:
+    id: "open-settings"
+- extendedWaitUntil:
+    visible: "Expense types"
+    timeout: 20000
+- takeScreenshot: 08-settings
+- back
+- extendedWaitUntil:
+    visible: "This month"
+    timeout: 20000

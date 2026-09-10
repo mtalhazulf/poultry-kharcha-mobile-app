@@ -19,7 +19,7 @@ import { colors, radius, spacing, touch, typography } from '../theme';
 type Props = RootStackScreenProps<'Walkthrough'>;
 
 /**
- * Four swipeable slides: one picture, one sentence each. Shown once after the
+ * Swipeable slides (see WALKTHROUGH_SLIDES): one picture, one sentence each. Shown once after the
  * first sign-in on a device, and replayable from the dashboard's Help button.
  */
 export default function WalkthroughScreen({ navigation, route }: Props) {
