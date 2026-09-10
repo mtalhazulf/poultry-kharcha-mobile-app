@@ -29,6 +29,8 @@ appId: com.mps.expensetracker
 - extendedWaitUntil:
     visible: "Welcome to MPS Expense Tracker"
     timeout: 45000
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: 02-walkthrough-1
 - tapOn:
     id: "walkthrough-next"
@@ -61,7 +63,7 @@ appId: com.mps.expensetracker
     timeout: 15000
 - tapOn:
     id: "form-amount"
-- inputText: "1250.50"
+- inputText: "18250"
 - hideKeyboard
 - takeScreenshot: 04-form-amount
 - tapOn:
@@ -74,7 +76,7 @@ appId: com.mps.expensetracker
     timeout: 10000
 - tapOn:
     id: "form-note"
-- inputText: "Biryani for the team"
+- inputText: "Layer and grower feed, 7 bags"
 - hideKeyboard
 
 # Attach a receipt from the gallery (Android Photo Picker, no permission).
@@ -105,8 +107,8 @@ appId: com.mps.expensetracker
     visible:
       id: "detail-amount"
     timeout: 45000
-- assertVisible: "PKR 1,250.50"
-- assertVisible: "Biryani for the team"
+- assertVisible: "PKR 18,250.00"
+- assertVisible: "Layer and grower feed, 7 bags"
 # The receipt was uploaded to the private bucket and is now fetched back
 # through a short-lived signed URL.
 - extendedWaitUntil:
@@ -118,12 +120,12 @@ appId: com.mps.expensetracker
 # Back to the dashboard: the new row must be listed (RLS-scoped query + realtime)
 - back
 - extendedWaitUntil:
-    visible: "Biryani for the team"
+    visible: "Layer and grower feed, 7 bags"
     timeout: 20000
 - takeScreenshot: 06-dashboard-with-expense
 
 # Clean up: delete the expense this run created (owner-only delete via RLS).
-- tapOn: "Biryani for the team"
+- tapOn: "Layer and grower feed, 7 bags"
 - extendedWaitUntil:
     visible:
       id: "detail-amount"
@@ -134,7 +136,7 @@ appId: com.mps.expensetracker
 - extendedWaitUntil:
     visible: "This month"
     timeout: 30000
-- assertNotVisible: "Biryani for the team"
+- assertNotVisible: "Layer and grower feed, 7 bags"
 - takeScreenshot: 07-dashboard-after-delete
 
 # Settings: the demo account is a member, so this shows the read-only
