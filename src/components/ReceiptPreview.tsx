@@ -50,7 +50,7 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
   let content: React.ReactNode;
   if (localUri) {
     content = (
-      <View style={styles.frame}>
+      <View style={styles.frame} testID="receipt-preview-local">
         <Image source={{ uri: localUri }} style={styles.image} resizeMode="cover" />
       </View>
     );
@@ -84,7 +84,10 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
     content = <ErrorBanner message={imageError.message} kind={imageError.kind} onRetry={retry} />;
   } else {
     content = (
-      <View style={styles.frame}>
+      <View
+        style={styles.frame}
+        testID={imageLoading ? 'receipt-preview-loading' : 'receipt-preview-loaded'}
+      >
         <Image
           source={{ uri: url }}
           style={styles.image}

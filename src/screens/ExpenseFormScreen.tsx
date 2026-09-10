@@ -383,6 +383,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
             <View style={styles.receiptActions}>
               <Button
                 title="Photo"
+                testID="receipt-camera"
                 icon="📷"
                 variant="secondary"
                 onPress={() => pick('camera')}
@@ -391,6 +392,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
               />
               <Button
                 title="Gallery"
+                testID="receipt-gallery"
                 icon="🖼️"
                 variant="secondary"
                 onPress={() => pick('gallery')}

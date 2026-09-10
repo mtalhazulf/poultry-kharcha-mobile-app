@@ -16,6 +16,13 @@ adb shell settings put global transition_animation_scale 0 || true
 adb shell settings put global animator_duration_scale 0 || true
 
 adb install -r apk/app-release.apk
+
+# Seed the emulator gallery with a sample receipt so the flow can exercise
+# the Photo Picker -> upload -> signed-URL round trip.
+adb shell mkdir -p /sdcard/Pictures
+adb push .maestro/fixtures/receipt.jpg /sdcard/Pictures/receipt.jpg
+adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/receipt.jpg >/dev/null 2>&1 || true
+adb shell content call --uri content://media/external/file --method scan_file --arg /sdcard/Pictures/receipt.jpg >/dev/null 2>&1 || true
 # Let the system settle after the install so the first launch isn't racing
 # the launcher / profile installer.
 sleep 5
