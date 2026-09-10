@@ -44,8 +44,8 @@ export function Button({
     variant === 'primary'
       ? colors.textOnPrimary
       : variant === 'danger'
-        ? colors.danger
-        : colors.primary;
+      ? colors.danger
+      : colors.primary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -221,7 +221,13 @@ export function Chip({
   );
 }
 
-export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 

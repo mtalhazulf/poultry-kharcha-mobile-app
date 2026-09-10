@@ -25,10 +25,7 @@ export async function ensureMyProfile(): Promise<void> {
   }
   const { error } = await supabase
     .from('profiles')
-    .upsert(
-      { id: user.id, email: user.email ?? '' },
-      { onConflict: 'id', ignoreDuplicates: true },
-    );
+    .upsert({ id: user.id, email: user.email ?? '' }, { onConflict: 'id', ignoreDuplicates: true });
   if (error && AppError.from(error).kind !== 'permission') {
     throw AppError.from(error);
   }

@@ -74,7 +74,20 @@ export function formatDate(isoDate: string): string {
   if (!y || !m || !d) {
     return isoDate;
   }
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return `${d} ${months[m - 1]} ${y}`;
 }
 

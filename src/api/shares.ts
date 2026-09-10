@@ -1,10 +1,6 @@
 import { AppError } from '../lib/errors';
 import { requireUserId, supabase } from '../lib/supabase';
-import {
-  toProfile,
-  type KharchaShare,
-  type KharchaShareWithProfile,
-} from '../types/models';
+import { toProfile, type KharchaShare, type KharchaShareWithProfile } from '../types/models';
 
 /** Everyone an expense is shared with. RLS lets the owner and each recipient see this. */
 export async function listSharesForKharcha(kharchaId: string): Promise<KharchaShareWithProfile[]> {

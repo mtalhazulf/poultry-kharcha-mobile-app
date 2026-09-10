@@ -41,10 +41,10 @@ export class AppError extends Error {
       typeof e.status === 'number'
         ? e.status
         : typeof e.statusCode === 'number'
-          ? e.statusCode
-          : typeof e.statusCode === 'string'
-            ? Number(e.statusCode)
-            : undefined;
+        ? e.statusCode
+        : typeof e.statusCode === 'string'
+        ? Number(e.statusCode)
+        : undefined;
     const name = typeof e.name === 'string' ? e.name : undefined;
 
     if (/network request failed|failed to fetch|fetch failed|timeout/i.test(message)) {
