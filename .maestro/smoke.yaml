@@ -39,8 +39,12 @@ appId: com.kharcha.app
 - assertVisible: "Keep the bill"
 - tapOn:
     id: "walkthrough-next"
-- assertVisible: "Share with family"
+- assertVisible: "Share with a colleague"
 - takeScreenshot: 02-walkthrough-4
+- tapOn:
+    id: "walkthrough-next"
+- assertVisible: "Expense types and staff are managed"
+- takeScreenshot: 02-walkthrough-5
 - tapOn:
     id: "walkthrough-next"
 
