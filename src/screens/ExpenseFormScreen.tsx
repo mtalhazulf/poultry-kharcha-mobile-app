@@ -239,6 +239,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
 
         <TextField
           label="Amount"
+          testID="form-amount"
           placeholder="0.00"
           value={amount}
           onChangeText={text => {
@@ -268,6 +269,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
 
         <TextField
           label="Note"
+          testID="form-note"
           placeholder="What was this for?"
           value={note}
           onChangeText={setNote}
@@ -336,6 +338,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
         ) : (
           <Button
             title={isEdit ? 'Save changes' : 'Save expense'}
+            testID="form-submit"
             onPress={submit}
             loading={saving}
             disabled={saving}

@@ -33,7 +33,13 @@ export function CategoryPicker({ value, onChange, error }: CategoryPickerProps) 
         {CATEGORIES.map(name => {
           const selected = name === OTHER ? otherSelected : value === name;
           return (
-            <Chip key={name} label={name} selected={selected} onPress={() => onChange(name)} />
+            <Chip
+              key={name}
+              label={name}
+              selected={selected}
+              onPress={() => onChange(name)}
+              testID={`category-${name}`}
+            />
           );
         })}
       </View>

@@ -1,0 +1,61 @@
+# End-to-end smoke run against the live Supabase project.
+#   maestro test .maestro/smoke.yaml -e EMAIL=... -e PASSWORD=...
+# Screenshots land in the current working directory.
+appId: com.kharcha.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Kharcha"
+    timeout: 60000
+- takeScreenshot: 01-login
+
+# Sign in with the seeded demo account
+- tapOn:
+    id: "login-email"
+- inputText: ${EMAIL}
+- tapOn:
+    id: "login-password"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "login-submit"
+- extendedWaitUntil:
+    visible: "This month"
+    timeout: 45000
+- takeScreenshot: 02-dashboard
+
+# Create an expense
+- tapOn:
+    id: "dashboard-fab"
+- extendedWaitUntil:
+    visible: "Amount"
+    timeout: 15000
+- tapOn:
+    id: "form-amount"
+- inputText: "1250.50"
+- tapOn:
+    id: "category-Food"
+- tapOn:
+    id: "form-note"
+- inputText: "Biryani for the team"
+- hideKeyboard
+- takeScreenshot: 03-form-filled
+- tapOn:
+    id: "form-submit"
+
+# Detail screen (navigation.replace after create)
+- extendedWaitUntil:
+    visible:
+      id: "detail-amount"
+    timeout: 45000
+- assertVisible: "PKR 1,250.50"
+- assertVisible: "Biryani for the team"
+- takeScreenshot: 04-detail
+
+# Back to the dashboard: the new row must be listed (RLS-scoped query + realtime)
+- back
+- extendedWaitUntil:
+    visible: "Biryani for the team"
+    timeout: 20000
+- takeScreenshot: 05-dashboard-with-expense

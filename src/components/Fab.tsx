@@ -15,6 +15,7 @@ export function Fab({ onPress, accessibilityLabel = 'Add expense' }: FabProps) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      testID="dashboard-fab"
       onPress={onPress}
       hitSlop={8}
       style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}

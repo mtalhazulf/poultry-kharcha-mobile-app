@@ -203,17 +203,20 @@ export function Chip({
   selected,
   onPress,
   style,
+  testID,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
+      testID={testID}
       style={[styles.chip, selected && styles.chipSelected, style]}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>

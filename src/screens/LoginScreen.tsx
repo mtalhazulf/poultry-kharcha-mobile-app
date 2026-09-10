@@ -95,6 +95,7 @@ export default function LoginScreen({ navigation }: Props) {
 
         <TextField
           label="Email"
+          testID="login-email"
           value={email}
           onChangeText={text => {
             setEmail(text);
@@ -115,6 +116,7 @@ export default function LoginScreen({ navigation }: Props) {
         />
         <TextField
           label="Password"
+          testID="login-password"
           value={password}
           onChangeText={text => {
             setPassword(text);
@@ -133,7 +135,13 @@ export default function LoginScreen({ navigation }: Props) {
           editable={!busy}
         />
 
-        <Button title="Sign in" onPress={onSignIn} loading={submitting} disabled={googleBusy} />
+        <Button
+          title="Sign in"
+          testID="login-submit"
+          onPress={onSignIn}
+          loading={submitting}
+          disabled={googleBusy}
+        />
 
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />

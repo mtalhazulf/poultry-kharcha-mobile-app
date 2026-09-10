@@ -172,7 +172,9 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
         {!isOwner ? <InfoBanner message="You have read-only access to this expense" /> : null}
 
         <Card style={styles.summary}>
-          <Text style={styles.amount}>{formatAmount(kharcha.amount)}</Text>
+          <Text style={styles.amount} testID="detail-amount">
+            {formatAmount(kharcha.amount)}
+          </Text>
           <View style={styles.metaRow}>
             <Badge label={kharcha.category} tone="mine" />
             {kharcha.visibility === 'shared' ? <Badge label="Shared" tone="shared" /> : null}
