@@ -1,15 +1,15 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
-import { colors, radius, shadow, spacing } from '../theme';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, shadow, spacing, touch } from '../theme';
 
-export const FAB_SIZE = 56;
+export const FAB_SIZE = touch.fab;
 
 export interface FabProps {
   onPress(): void;
   accessibilityLabel?: string;
 }
 
-/** Floating "+" button pinned to the bottom-right of its parent. */
+/** Extended "＋ Add" pill pinned to the bottom-right of its parent. */
 export function Fab({ onPress, accessibilityLabel = 'Add expense' }: FabProps) {
   return (
     <Pressable
@@ -20,9 +20,10 @@ export function Fab({ onPress, accessibilityLabel = 'Add expense' }: FabProps) {
       hitSlop={8}
       style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
     >
-      <Text style={styles.plus} accessible={false}>
-        +
-      </Text>
+      <View style={styles.content} accessible={false}>
+        <Text style={styles.plus}>＋</Text>
+        <Text style={styles.label}>Add</Text>
+      </View>
     </Pressable>
   );
 }
@@ -32,8 +33,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.lg,
     bottom: spacing.lg,
-    width: FAB_SIZE,
     height: FAB_SIZE,
+    minWidth: FAB_SIZE,
+    paddingHorizontal: spacing.xl,
     borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
@@ -41,11 +43,19 @@ const styles = StyleSheet.create({
     ...shadow.fab,
   },
   fabPressed: { backgroundColor: colors.primaryDark },
+  content: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   plus: {
     color: colors.textOnPrimary,
-    fontSize: 30,
-    fontWeight: '400',
-    lineHeight: 34,
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 32,
+    includeFontPadding: false,
+  },
+  label: {
+    color: colors.textOnPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 24,
     includeFontPadding: false,
   },
 });

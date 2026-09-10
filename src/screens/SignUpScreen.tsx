@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthProvider';
 import { validateEmail, validatePassword } from '../lib/auth';
 import { AppError } from '../lib/errors';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, spacing, typography } from '../theme';
+import { colors, spacing, touch, typography } from '../theme';
 
 type Props = RootStackScreenProps<'SignUp'>;
 
@@ -89,12 +89,23 @@ export default function SignUpScreen({ navigation }: Props) {
       <View
         style={[styles.flex, styles.confirmWrap, { paddingBottom: insets.bottom + spacing.xl }]}
       >
-        <Text style={styles.confirmTitle}>Almost there</Text>
-        <InfoBanner message="Check your inbox to confirm your email, then sign in." />
+        <Text style={styles.heroEmoji} accessible={false}>
+          📬
+        </Text>
+        <Text style={styles.confirmTitle} accessibilityRole="header">
+          Almost there
+        </Text>
+        <InfoBanner icon="✉️" message="Check your inbox to confirm your email, then sign in." />
         <Text style={styles.confirmHint}>
           We sent a confirmation link to {email.trim()}. It may take a minute to arrive.
         </Text>
-        <Button title="Back to sign in" onPress={goToLogin} style={styles.confirmButton} />
+        <Button
+          size="lg"
+          icon="➡️"
+          title="Back to sign in"
+          onPress={goToLogin}
+          style={styles.confirmButton}
+        />
       </View>
     );
   }
@@ -108,17 +119,23 @@ export default function SignUpScreen({ navigation }: Props) {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.intro}>
-          Create an account to start tracking expenses and sharing them with others.
-        </Text>
+        <View style={styles.hero}>
+          <Text style={styles.heroEmoji} accessible={false}>
+            🙋
+          </Text>
+          <Text style={styles.title} accessibilityRole="header">
+            Create account
+          </Text>
+        </View>
 
         <ErrorBanner message={error?.message} kind={error?.kind} onDismiss={() => setError(null)} />
 
         <TextField
-          label="Display name (optional)"
+          icon="👤"
+          accessibilityLabel="Your name (optional)"
           value={displayName}
           onChangeText={setDisplayName}
-          placeholder="How others will see you"
+          placeholder="Your name"
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
@@ -126,7 +143,8 @@ export default function SignUpScreen({ navigation }: Props) {
           editable={!submitting}
         />
         <TextField
-          label="Email"
+          icon="📧"
+          accessibilityLabel="Email"
           value={email}
           onChangeText={text => {
             setEmail(text);
@@ -138,7 +156,7 @@ export default function SignUpScreen({ navigation }: Props) {
             }
           }}
           error={fieldErrors.email}
-          placeholder="you@example.com"
+          placeholder="Email"
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="email"
@@ -148,7 +166,8 @@ export default function SignUpScreen({ navigation }: Props) {
           editable={!submitting}
         />
         <TextField
-          label="Password"
+          icon="🔒"
+          accessibilityLabel="Password"
           value={password}
           onChangeText={text => {
             setPassword(text);
@@ -157,7 +176,7 @@ export default function SignUpScreen({ navigation }: Props) {
           }}
           error={fieldErrors.password}
           hint="At least 8 characters."
-          placeholder="Choose a password"
+          placeholder="Password"
           secureTextEntry
           autoCapitalize="none"
           autoComplete="new-password"
@@ -166,7 +185,8 @@ export default function SignUpScreen({ navigation }: Props) {
           editable={!submitting}
         />
         <TextField
-          label="Confirm password"
+          icon="🔒"
+          accessibilityLabel="Repeat password"
           value={confirm}
           onChangeText={text => {
             setConfirm(text);
@@ -178,7 +198,7 @@ export default function SignUpScreen({ navigation }: Props) {
             }
           }}
           error={fieldErrors.confirm}
-          placeholder="Repeat your password"
+          placeholder="Repeat password"
           secureTextEntry
           autoCapitalize="none"
           autoComplete="new-password"
@@ -188,14 +208,24 @@ export default function SignUpScreen({ navigation }: Props) {
           editable={!submitting}
         />
 
-        <Button title="Create account" onPress={onSubmit} loading={submitting} />
+        <Button
+          size="lg"
+          icon="✅"
+          title="Create account"
+          onPress={onSubmit}
+          loading={submitting}
+        />
 
-        <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Already have an account? Sign in"
+          onPress={goToLogin}
+          disabled={submitting}
+          style={({ pressed }) => [styles.footer, pressed && styles.footerPressed]}
+        >
           <Text style={styles.footerText}>Already have an account?</Text>
-          <Pressable accessibilityRole="link" onPress={goToLogin} disabled={submitting} hitSlop={8}>
-            <Text style={styles.footerLink}>Sign in</Text>
-          </Pressable>
-        </View>
+          <Text style={styles.footerLink}>Sign in</Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -204,17 +234,22 @@ export default function SignUpScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   content: { flexGrow: 1, padding: spacing.xl },
-  intro: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xl },
+  hero: { alignItems: 'center', marginBottom: spacing.xl, gap: spacing.sm },
+  heroEmoji: { fontSize: 72, lineHeight: 88, textAlign: 'center' },
+  title: { ...typography.title, color: colors.primary },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xxl,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    minHeight: touch.min,
+    marginTop: spacing.xl,
   },
+  footerPressed: { opacity: 0.7 },
   footerText: { ...typography.body, color: colors.textMuted },
-  footerLink: { ...typography.body, color: colors.primary, fontWeight: '600' },
-  confirmWrap: { padding: spacing.xl, justifyContent: 'center' },
+  footerLink: { ...typography.bodyStrong, color: colors.primary },
+  confirmWrap: { padding: spacing.xl, justifyContent: 'center', alignItems: 'stretch' },
   confirmTitle: { ...typography.title, marginBottom: spacing.lg, textAlign: 'center' },
   confirmHint: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   confirmButton: { marginTop: spacing.xl },

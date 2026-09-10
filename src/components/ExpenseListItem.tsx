@@ -1,8 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, formatAmount, formatDate, radius, shadow, spacing, typography } from '../theme';
+import { formatAmount, formatDate, formatDateFriendly, spacing, typography } from '../theme';
+import { getCategoryMeta } from '../theme/categories';
 import type { Kharcha } from '../types/models';
-import { Badge } from './ui';
+import { Badge, Card, IconCircle } from './ui';
 
 export interface ExpenseListItemProps {
   item: Kharcha;
@@ -15,6 +16,7 @@ function ExpenseListItemComponent({ item, isOwner, onPress }: ExpenseListItemPro
   const showSharedWithYou = !isOwner;
   const showShared = isOwner && item.visibility === 'shared';
   const hasReceipt = Boolean(item.receipt_path);
+  const meta = getCategoryMeta(item.category);
 
   return (
     <Pressable
@@ -23,33 +25,38 @@ function ExpenseListItemComponent({ item, isOwner, onPress }: ExpenseListItemPro
         item.expense_date,
       )}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [pressed && styles.pressed]}
     >
-      <View style={styles.main}>
-        <View style={styles.titleRow}>
-          <Text style={styles.category} numberOfLines={1}>
-            {item.category}
-          </Text>
-          {showSharedWithYou ? <Badge label="Shared with you" tone="shared" /> : null}
-          {showShared ? <Badge label="Shared" tone="mine" /> : null}
-        </View>
-        {item.note ? (
-          <Text style={styles.note} numberOfLines={1}>
-            {item.note}
-          </Text>
-        ) : null}
-        <View style={styles.metaRow}>
-          <Text style={styles.date}>{formatDate(item.expense_date)}</Text>
-          {hasReceipt ? (
-            <Text style={styles.receipt} accessibilityLabel="Has receipt">
-              📎 Receipt
+      <Card style={styles.card}>
+        <IconCircle emoji={meta.emoji} bg={meta.bg} size={48} />
+
+        <View style={styles.main}>
+          <View style={styles.titleRow}>
+            <Text style={styles.category} numberOfLines={1}>
+              {item.category}
+            </Text>
+            {hasReceipt ? (
+              <Text style={styles.receipt} accessibilityLabel="Has receipt">
+                📎
+              </Text>
+            ) : null}
+          </View>
+          {item.note ? (
+            <Text style={styles.note} numberOfLines={1}>
+              {item.note}
             </Text>
           ) : null}
+          {showSharedWithYou ? <Badge icon="👥" label="Shared" tone="shared" /> : null}
+          {showShared ? <Badge icon="👥" label="Shared" tone="mine" /> : null}
         </View>
-      </View>
-      <Text style={styles.amount} numberOfLines={1}>
-        {formatAmount(item.amount)}
-      </Text>
+
+        <View style={styles.right}>
+          <Text style={styles.amount} numberOfLines={1}>
+            {formatAmount(item.amount)}
+          </Text>
+          <Text style={styles.date}>{formatDateFriendly(item.expense_date)}</Text>
+        </View>
+      </Card>
     </Pressable>
   );
 }
@@ -57,34 +64,20 @@ function ExpenseListItemComponent({ item, isOwner, onPress }: ExpenseListItemPro
 export const ExpenseListItem = React.memo(ExpenseListItemComponent);
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.7 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    ...shadow.card,
+    minHeight: 72,
+    paddingVertical: spacing.md,
   },
-  cardPressed: { opacity: 0.85 },
   main: { flex: 1, gap: spacing.xs },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  category: { ...typography.body, fontWeight: '600', flexShrink: 1 },
-  note: { ...typography.caption, fontSize: 14 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  date: { ...typography.caption },
-  receipt: { ...typography.caption, color: colors.primary },
-  amount: {
-    ...typography.amount,
-    fontSize: 18,
-    textAlign: 'right',
-    flexShrink: 0,
-  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  category: { ...typography.bodyStrong, flexShrink: 1 },
+  receipt: { fontSize: 16 },
+  note: { ...typography.caption },
+  right: { alignItems: 'flex-end', gap: spacing.xs, flexShrink: 0 },
+  amount: { ...typography.amount, textAlign: 'right' },
+  date: { ...typography.caption, textAlign: 'right' },
 });

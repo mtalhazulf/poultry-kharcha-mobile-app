@@ -1,14 +1,21 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { ExpenseListItem } from '../components/ExpenseListItem';
 import { Fab, FAB_SIZE } from '../components/Fab';
-import { applyFilters, DEFAULT_FILTERS, FilterBar, type Filters } from '../components/FilterBar';
+import {
+  activeFilterCount,
+  applyFilters,
+  DEFAULT_FILTERS,
+  FilterSheet,
+  OwnershipToggle,
+  type Filters,
+} from '../components/FilterBar';
 import { Button, Card, EmptyState, ErrorBanner, InfoBanner, LoadingView } from '../components/ui';
 import { useAuth } from '../context/AuthProvider';
 import { useKharchaList } from '../hooks/useKharchaList';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, formatAmount, spacing, toIsoDate, typography } from '../theme';
+import { colors, formatAmountShort, radius, spacing, toIsoDate, touch, typography } from '../theme';
 import type { Kharcha } from '../types/models';
 
 type Props = RootStackScreenProps<'Dashboard'>;
@@ -54,6 +61,7 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
   const { items, loading, refreshing, error, fromCache, cachedAt, refresh, revalidate } =
     useKharchaList();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Realtime keeps the list live, but the socket can drop while the app is
   // backgrounded; a silent refetch on every return to this screen covers the
@@ -72,11 +80,19 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
   const summary = useMemo(() => summarizeThisMonth(items, userId, new Date()), [items, userId]);
   const categories = useMemo(() => [...new Set(items.map(item => item.category))], [items]);
   const visible = useMemo(() => applyFilters(items, filters, userId), [items, filters, userId]);
+  const advancedCount = activeFilterCount(filters);
 
   const openForm = useCallback(() => navigation.navigate('ExpenseForm'), [navigation]);
   const openDetail = useCallback(
     (kharchaId: string) => navigation.navigate('ExpenseDetail', { kharchaId }),
     [navigation],
+  );
+  const openSheet = useCallback(() => setSheetOpen(true), []);
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
+  const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
+  const setOwnership = useCallback(
+    (ownership: Filters['ownership']) => setFilters(prev => ({ ...prev, ownership })),
+    [],
   );
 
   const renderItem = useCallback(
@@ -115,36 +131,54 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
           style={styles.banner}
         />
       ) : null}
+
       <Card style={styles.summary}>
         <Text style={styles.summaryLabel}>This month</Text>
-        <Text style={styles.summaryAmount}>{formatAmount(summary.total)}</Text>
+        <Text style={styles.summaryAmount} numberOfLines={1} adjustsFontSizeToFit>
+          {formatAmountShort(summary.total)}
+        </Text>
         <Text style={styles.summaryCaption}>
-          {summary.count === 1 ? '1 expense' : `${summary.count} expenses`} of yours
+          {summary.count === 1 ? '1 expense' : `${summary.count} expenses`}
         </Text>
       </Card>
-      <Text style={styles.sectionTitle}>Expenses</Text>
-      <FilterBar filters={filters} onChange={setFilters} categories={categories} />
+
+      <View style={styles.filterRow}>
+        <View style={styles.toggle}>
+          <OwnershipToggle value={filters.ownership} onChange={setOwnership} />
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Filters"
+          accessibilityState={{ selected: advancedCount > 0 }}
+          onPress={openSheet}
+          testID="dashboard-filters"
+          style={({ pressed }) => [
+            styles.filterButton,
+            advancedCount > 0 && styles.filterButtonActive,
+            pressed && styles.filterButtonPressed,
+          ]}
+        >
+          <Text style={styles.filterIcon} accessible={false}>
+            ⚙️
+          </Text>
+          {advancedCount > 0 ? (
+            <View style={styles.filterDot} accessible={false}>
+              <Text style={styles.filterDotText}>{advancedCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
     </View>
   );
 
   const empty = hasAnyItems ? (
     <EmptyState
-      title="Nothing matches these filters"
-      message="Try a wider date range or a different category."
-      action={
-        <Button
-          title="Clear filters"
-          variant="secondary"
-          onPress={() => setFilters(DEFAULT_FILTERS)}
-        />
-      }
+      emoji="🔍"
+      title="Nothing here"
+      action={<Button icon="🗂️" title="Show all" variant="secondary" onPress={clearFilters} />}
     />
   ) : (
-    <EmptyState
-      title="No expenses yet"
-      message="Add your first expense to start tracking."
-      action={<Button title="Add expense" onPress={openForm} />}
-    />
+    <EmptyState emoji="🧾" title="No expenses yet" message="Tap Add to write your first one" />
   );
 
   return (
@@ -161,6 +195,13 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
           <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[colors.primary]} />
         }
         keyboardShouldPersistTaps="handled"
+      />
+      <FilterSheet
+        visible={sheetOpen}
+        filters={filters}
+        categories={categories}
+        onChange={setFilters}
+        onClose={closeSheet}
       />
       <Fab onPress={openForm} />
     </View>
@@ -179,16 +220,39 @@ const styles = StyleSheet.create({
     paddingBottom: FAB_SIZE + spacing.xl * 2,
   },
   contentEmpty: { flexGrow: 1 },
-  header: {
-    marginHorizontal: -spacing.lg,
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  banner: { marginHorizontal: spacing.lg, marginBottom: 0 },
-  summary: { marginHorizontal: spacing.lg, gap: spacing.xs },
+  header: { gap: spacing.md, marginBottom: spacing.md },
+  banner: { marginBottom: 0 },
+  summary: { gap: spacing.xs, alignItems: 'center' },
   summaryLabel: { ...typography.label },
-  summaryAmount: { ...typography.title, fontSize: 28 },
+  summaryAmount: { ...typography.display, color: colors.primary },
   summaryCaption: { ...typography.caption },
-  sectionTitle: { ...typography.heading, paddingHorizontal: spacing.lg },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  toggle: { flex: 1 },
+  filterButton: {
+    width: touch.min,
+    height: touch.min,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterButtonActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  filterButtonPressed: { opacity: 0.7 },
+  filterIcon: { fontSize: 26 },
+  filterDot: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterDotText: { color: colors.textOnPrimary, fontSize: 13, fontWeight: '800' },
   separator: { height: spacing.md },
 });

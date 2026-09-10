@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthProvider';
 import { validateEmail, validatePassword } from '../lib/auth';
 import { AppError } from '../lib/errors';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, spacing, typography } from '../theme';
+import { colors, spacing, touch, typography } from '../theme';
 
 type Props = RootStackScreenProps<'Login'>;
 
@@ -83,8 +83,13 @@ export default function LoginScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.hero}>
-          <Text style={styles.title}>Kharcha</Text>
-          <Text style={styles.tagline}>Track every rupee. Share what matters.</Text>
+          <Text style={styles.heroEmoji} accessible={false}>
+            💰
+          </Text>
+          <Text style={styles.title} accessibilityRole="header">
+            Kharcha
+          </Text>
+          <Text style={styles.tagline}>Keep track of your money</Text>
         </View>
 
         <ErrorBanner
@@ -94,8 +99,9 @@ export default function LoginScreen({ navigation }: Props) {
         />
 
         <TextField
-          label="Email"
+          icon="📧"
           testID="login-email"
+          accessibilityLabel="Email"
           value={email}
           onChangeText={text => {
             setEmail(text);
@@ -105,7 +111,7 @@ export default function LoginScreen({ navigation }: Props) {
           }}
           onBlur={() => setEmailError(email ? validateEmail(email) : null)}
           error={emailError}
-          placeholder="you@example.com"
+          placeholder="Email"
           autoCapitalize="none"
           autoCorrect={false}
           autoComplete="email"
@@ -115,8 +121,9 @@ export default function LoginScreen({ navigation }: Props) {
           editable={!busy}
         />
         <TextField
-          label="Password"
+          icon="🔒"
           testID="login-password"
+          accessibilityLabel="Password"
           value={password}
           onChangeText={text => {
             setPassword(text);
@@ -125,7 +132,7 @@ export default function LoginScreen({ navigation }: Props) {
             }
           }}
           error={passwordError}
-          placeholder="Your password"
+          placeholder="Password"
           secureTextEntry
           autoCapitalize="none"
           autoComplete="password"
@@ -136,7 +143,9 @@ export default function LoginScreen({ navigation }: Props) {
         />
 
         <Button
-          title="Sign in"
+          size="lg"
+          icon="➡️"
+          title="Enter"
           testID="login-submit"
           onPress={onSignIn}
           loading={submitting}
@@ -150,6 +159,7 @@ export default function LoginScreen({ navigation }: Props) {
         </View>
 
         <Button
+          icon="G"
           title="Continue with Google"
           variant="secondary"
           onPress={onGoogle}
@@ -157,17 +167,16 @@ export default function LoginScreen({ navigation }: Props) {
           disabled={submitting}
         />
 
-        <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="New here? Create account"
+          onPress={() => navigation.navigate('SignUp')}
+          disabled={busy}
+          style={({ pressed }) => [styles.footer, pressed && styles.footerPressed]}
+        >
           <Text style={styles.footerText}>New here?</Text>
-          <Pressable
-            accessibilityRole="link"
-            onPress={() => navigation.navigate('SignUp')}
-            disabled={busy}
-            hitSlop={8}
-          >
-            <Text style={styles.footerLink}>Create an account</Text>
-          </Pressable>
-        </View>
+          <Text style={styles.footerLink}>Create account</Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -180,9 +189,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     justifyContent: 'center',
   },
-  hero: { alignItems: 'center', marginBottom: spacing.xxl },
-  title: { ...typography.title, fontSize: 36, color: colors.primary },
-  tagline: { ...typography.body, color: colors.textMuted, marginTop: spacing.sm },
+  hero: { alignItems: 'center', marginBottom: spacing.xxl, gap: spacing.sm },
+  heroEmoji: { fontSize: 72, lineHeight: 88 },
+  title: { ...typography.display, color: colors.primary },
+  tagline: { ...typography.body, color: colors.textMuted },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -195,9 +205,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xxl,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    minHeight: touch.min,
+    marginTop: spacing.xl,
   },
+  footerPressed: { opacity: 0.7 },
   footerText: { ...typography.body, color: colors.textMuted },
-  footerLink: { ...typography.body, color: colors.primary, fontWeight: '600' },
+  footerLink: { ...typography.bodyStrong, color: colors.primary },
 });

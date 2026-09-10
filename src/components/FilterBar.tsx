@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, toIsoDate, typography } from '../theme';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, shadow, spacing, toIsoDate, typography } from '../theme';
+import { getCategoryMeta } from '../theme/categories';
 import { CATEGORIES, type Kharcha } from '../types/models';
-import { Chip } from './ui';
+import { Button, Chip, Segmented, type SegmentOption } from './ui';
 
 export type OwnershipFilter = 'all' | 'mine' | 'shared';
 export type DateFilter = 'this_month' | 'last_month' | 'last_30' | 'all';
@@ -20,20 +21,17 @@ export const DEFAULT_FILTERS: Filters = {
   category: null,
 };
 
-const OWNERSHIP_OPTIONS: ReadonlyArray<{
-  value: OwnershipFilter;
-  label: string;
-}> = [
-  { value: 'all', label: 'All' },
-  { value: 'mine', label: 'Mine' },
-  { value: 'shared', label: 'Shared with me' },
+const OWNERSHIP_OPTIONS: ReadonlyArray<SegmentOption<OwnershipFilter>> = [
+  { value: 'all', label: 'All', icon: '🗂️' },
+  { value: 'mine', label: 'Mine', icon: '👤' },
+  { value: 'shared', label: 'Shared', icon: '👥' },
 ];
 
-const DATE_OPTIONS: ReadonlyArray<{ value: DateFilter; label: string }> = [
-  { value: 'this_month', label: 'This month' },
-  { value: 'last_month', label: 'Last month' },
-  { value: 'last_30', label: 'Last 30 days' },
-  { value: 'all', label: 'All time' },
+const DATE_OPTIONS: ReadonlyArray<{ value: DateFilter; label: string; icon: string }> = [
+  { value: 'this_month', label: 'This month', icon: '📅' },
+  { value: 'last_month', label: 'Last month', icon: '⏮️' },
+  { value: 'last_30', label: 'Last 30 days', icon: '🗓️' },
+  { value: 'all', label: 'All time', icon: '♾️' },
 ];
 
 /**
@@ -91,14 +89,46 @@ export function applyFilters(
   });
 }
 
-export interface FilterBarProps {
-  filters: Filters;
-  onChange(next: Filters): void;
-  /** Categories present in the data; merged with the built-in CATEGORIES. */
-  categories: string[];
+/**
+ * How many "advanced" filters (the ones behind the ⚙️ button) are away from
+ * their defaults. Ownership is always visible, so it does not count.
+ */
+export function activeFilterCount(filters: Filters): number {
+  let count = 0;
+  if (filters.dateRange !== DEFAULT_FILTERS.dateRange) {
+    count += 1;
+  }
+  if (filters.category !== null) {
+    count += 1;
+  }
+  return count;
 }
 
-export function FilterBar({ filters, onChange, categories }: FilterBarProps) {
+// --- OwnershipToggle --------------------------------------------------------
+
+export interface OwnershipToggleProps {
+  value: OwnershipFilter;
+  onChange(next: OwnershipFilter): void;
+}
+
+/** All / Mine / Shared — always on screen, one tap each. */
+export function OwnershipToggle({ value, onChange }: OwnershipToggleProps) {
+  return <Segmented options={OWNERSHIP_OPTIONS} value={value} onChange={onChange} />;
+}
+
+// --- FilterSheet ------------------------------------------------------------
+
+export interface FilterSheetProps {
+  visible: boolean;
+  filters: Filters;
+  /** Categories present in the data; merged with the built-in CATEGORIES. */
+  categories: string[];
+  onChange(next: Filters): void;
+  onClose(): void;
+}
+
+/** Bottom sheet with the date range and category filters. */
+export function FilterSheet({ visible, filters, categories, onChange, onClose }: FilterSheetProps) {
   const categoryOptions = useMemo(() => {
     const set = new Set<string>(CATEGORIES);
     for (const category of categories) {
@@ -109,70 +139,116 @@ export function FilterBar({ filters, onChange, categories }: FilterBarProps) {
     return [...set];
   }, [categories]);
 
-  return (
-    <View style={styles.container}>
-      <FilterRow label="Show">
-        {OWNERSHIP_OPTIONS.map(option => (
-          <Chip
-            key={option.value}
-            label={option.label}
-            selected={filters.ownership === option.value}
-            onPress={() => onChange({ ...filters, ownership: option.value })}
-          />
-        ))}
-      </FilterRow>
-      <FilterRow label="When">
-        {DATE_OPTIONS.map(option => (
-          <Chip
-            key={option.value}
-            label={option.label}
-            selected={filters.dateRange === option.value}
-            onPress={() => onChange({ ...filters, dateRange: option.value })}
-          />
-        ))}
-      </FilterRow>
-      <FilterRow label="Category">
-        <Chip
-          label="All"
-          selected={filters.category === null}
-          onPress={() => onChange({ ...filters, category: null })}
-        />
-        {categoryOptions.map(category => (
-          <Chip
-            key={category}
-            label={category}
-            selected={filters.category === category}
-            onPress={() => onChange({ ...filters, category })}
-          />
-        ))}
-      </FilterRow>
-    </View>
-  );
-}
+  const clear = () =>
+    onChange({
+      ...filters,
+      dateRange: DEFAULT_FILTERS.dateRange,
+      category: DEFAULT_FILTERS.category,
+    });
 
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        keyboardShouldPersistTaps="handled"
-      >
-        {children}
-      </ScrollView>
-    </View>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={styles.backdrop}>
+        <Pressable
+          style={[StyleSheet.absoluteFill, styles.scrim]}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close filters"
+        />
+        <View style={styles.sheet} testID="filter-sheet">
+          <View style={styles.handle} accessible={false} />
+          <Text style={styles.sheetTitle} accessibilityRole="header">
+            ⚙️ Filters
+          </Text>
+
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.sectionLabel}>When</Text>
+            <View style={styles.chips}>
+              {DATE_OPTIONS.map(option => (
+                <Chip
+                  key={option.value}
+                  icon={option.icon}
+                  label={option.label}
+                  selected={filters.dateRange === option.value}
+                  onPress={() => onChange({ ...filters, dateRange: option.value })}
+                  testID={`filter-date-${option.value}`}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.sectionLabel}>Category</Text>
+            <View style={styles.chips}>
+              <Chip
+                icon="🗂️"
+                label="All"
+                selected={filters.category === null}
+                onPress={() => onChange({ ...filters, category: null })}
+                testID="filter-category-all"
+              />
+              {categoryOptions.map(category => (
+                <Chip
+                  key={category}
+                  icon={getCategoryMeta(category).emoji}
+                  label={category}
+                  selected={filters.category === category}
+                  onPress={() => onChange({ ...filters, category })}
+                  testID={`filter-category-${category}`}
+                />
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={styles.actions}>
+            <Button size="lg" icon="✅" title="Done" onPress={onClose} testID="filter-done" />
+            <Button
+              variant="ghost"
+              icon="🧹"
+              title="Clear filters"
+              onPress={clear}
+              disabled={activeFilterCount(filters) === 0}
+              testID="filter-clear"
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: spacing.sm, backgroundColor: colors.background },
-  row: { gap: spacing.xs },
-  rowLabel: { ...typography.label, paddingHorizontal: spacing.lg },
-  chips: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
+  scrim: { backgroundColor: colors.text, opacity: 0.45 },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg + 4,
+    borderTopRightRadius: radius.lg + 4,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    maxHeight: '85%',
+    ...shadow.fab,
   },
+  handle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  sheetTitle: { ...typography.heading, paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
+  scroll: { flexGrow: 0 },
+  scrollContent: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
+  sectionLabel: { ...typography.label, marginTop: spacing.md, marginBottom: spacing.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  actions: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.sm },
 });
