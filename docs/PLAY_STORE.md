@@ -72,3 +72,21 @@ install `app-release.apk` on each phone (allow "install unknown apps").
 Signed with the debug key until a keystore is configured; that is fine for
 sideloading but a device will refuse an upgrade if the signing key later
 changes — set up the keystore before handing phones out.
+
+## Automated upload (Google Play Developer API)
+
+There is no Play Console MCP/connector, but the workflow can publish for you:
+
+1. In Play Console → **Users and permissions** → *Invite new users* →
+   choose a **service account** (create one in Google Cloud → IAM → Service
+   accounts, with a JSON key; enable the *Google Play Android Developer API*
+   on that project). Give it **Release to testing tracks** + **View app
+   information** on Kharcha.
+2. Upload the **first** AAB manually once (the API cannot create the app or
+   its first release).
+3. Add the GitHub secret `PLAY_SERVICE_ACCOUNT_JSON` (the key file contents)
+   alongside the keystore secrets.
+4. Release = push a tag: `git tag -a v1.0.1 -m "Fixes …" && git push origin v1.0.1`.
+   CI builds, runs the emulator smoke test, then uploads to **Internal
+   testing** with the tag message as release notes. `versionName` comes from
+   the tag, `versionCode` from the CI run number (always increasing).
