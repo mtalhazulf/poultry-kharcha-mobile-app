@@ -15,7 +15,7 @@ import { Button, Card, EmptyState, ErrorBanner, InfoBanner, LoadingView } from '
 import { useAuth } from '../context/AuthProvider';
 import { useKharchaList } from '../hooks/useKharchaList';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, formatAmountShort, radius, spacing, toIsoDate, touch, typography } from '../theme';
+import { colors, formatAmountSmart, radius, spacing, toIsoDate, touch, typography } from '../theme';
 import type { Kharcha } from '../types/models';
 
 type Props = RootStackScreenProps<'Dashboard'>;
@@ -135,7 +135,7 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
       <Card style={styles.summary}>
         <Text style={styles.summaryLabel}>This month</Text>
         <Text style={styles.summaryAmount} numberOfLines={1} adjustsFontSizeToFit>
-          {formatAmountShort(summary.total)}
+          {formatAmountSmart(summary.total)}
         </Text>
         <Text style={styles.summaryCaption}>
           {summary.count === 1 ? '1 expense' : `${summary.count} expenses`}

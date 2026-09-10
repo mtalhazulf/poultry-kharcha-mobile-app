@@ -70,3 +70,11 @@ describe('formatDateFriendly', () => {
     expect(formatDateFriendly('2025-12-31', now)).toBe('31 Dec 2025');
   });
 });
+
+describe('formatAmountSmart', () => {
+  const { formatAmountSmart } = require('../src/theme') as typeof import('../src/theme');
+  it('hides decimals only for whole amounts', () => {
+    expect(formatAmountSmart(2500)).toBe('PKR 2,500');
+    expect(formatAmountSmart(1250.5)).toBe('PKR 1,250.50');
+  });
+});

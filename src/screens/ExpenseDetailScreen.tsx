@@ -108,7 +108,7 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
     Alert.alert('Delete expense?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Yes, delete',
         style: 'destructive',
         onPress: async () => {
           setDeleting(true);

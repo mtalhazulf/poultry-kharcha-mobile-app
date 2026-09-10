@@ -90,6 +90,13 @@ export function formatAmountShort(amount: number, currency = CURRENCY): string {
   return `${amount < 0 ? '-' : ''}${currency} ${grouped}`;
 }
 
+/** Whole amounts without decimals ("PKR 12,500"), fractional ones with ("PKR 1,250.50"). */
+export function formatAmountSmart(amount: number, currency = CURRENCY): string {
+  return Number.isInteger(Math.round(amount * 100) / 100) && Number.isInteger(amount)
+    ? formatAmountShort(amount, currency)
+    : formatAmount(amount, currency);
+}
+
 /** YYYY-MM-DD -> "10 Sep 2026" without pulling in a date library. */
 export function formatDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number);

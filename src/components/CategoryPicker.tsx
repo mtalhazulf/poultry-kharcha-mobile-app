@@ -71,7 +71,8 @@ function Tile({
  * otherwise plain "Other".
  */
 export function CategoryPicker({ value, onChange, error }: CategoryPickerProps) {
-  const otherSelected = !isPreset(value) || value === OTHER;
+  // Empty means "not chosen yet": no tile highlighted, no custom field.
+  const otherSelected = value === OTHER || (value !== '' && !isPreset(value));
   const customText = otherSelected && value !== OTHER ? value : '';
 
   return (

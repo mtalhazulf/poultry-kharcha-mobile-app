@@ -40,7 +40,7 @@ export const WALKTHROUGH_SLIDES: readonly WalkthroughSlide[] = [
   {
     emoji: '➕',
     title: 'Add an expense',
-    text: 'Tap the big  ＋ Add  button.\nType the amount and pick a picture.',
+    text: 'Tap the big  ＋ Add  button.\nType the amount, then tap what it was for.',
     bg: '#DDEBFF',
   },
   {

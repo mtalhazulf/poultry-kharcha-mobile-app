@@ -91,3 +91,18 @@ appId: com.kharcha.app
     visible: "Biryani for the team"
     timeout: 20000
 - takeScreenshot: 06-dashboard-with-expense
+
+# Clean up: delete the expense this run created (owner-only delete via RLS).
+- tapOn: "Biryani for the team"
+- extendedWaitUntil:
+    visible:
+      id: "detail-amount"
+    timeout: 30000
+- tapOn: "Delete"
+- assertVisible: "Delete expense?"
+- tapOn: "Yes, delete"
+- extendedWaitUntil:
+    visible: "This month"
+    timeout: 30000
+- assertNotVisible: "Biryani for the team"
+- takeScreenshot: 07-dashboard-after-delete
