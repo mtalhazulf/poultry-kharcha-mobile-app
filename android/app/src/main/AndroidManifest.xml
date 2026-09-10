@@ -2,6 +2,30 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Receipt capture (react-native-image-picker launchCamera). Runtime-requested. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Receipt selection from the gallery. READ_MEDIA_IMAGES is the API 33+
+         permission; READ_EXTERNAL_STORAGE covers API 24-32 only. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- The app still works (gallery only) on devices without a camera. -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Android 11+ package visibility: lets Linking.canOpenURL / openURL
+         resolve a browser for the Supabase OAuth authorize URL. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"
@@ -21,6 +45,20 @@
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+        <!-- OAuth deep link: Supabase redirects to kharcha://auth/callback
+             after browser-based sign-in. singleTask above means the existing
+             activity receives it via onNewIntent instead of a second instance.
+             Must match OAUTH_REDIRECT_URL in .env and the Supabase
+             Authentication -> URL Configuration -> Redirect URLs list. -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="kharcha"
+                android:host="auth"
+                android:pathPrefix="/callback" />
         </intent-filter>
       </activity>
     </application>
