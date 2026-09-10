@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { ExpenseListItem } from '../components/ExpenseListItem';
 import { Fab, FAB_SIZE } from '../components/Fab';
@@ -50,8 +51,23 @@ export default function DashboardScreen({ navigation }: Props) {
 }
 
 function DashboardContent({ userId, navigation }: { userId: string } & Pick<Props, 'navigation'>) {
-  const { items, loading, refreshing, error, fromCache, cachedAt, refresh } = useKharchaList();
+  const { items, loading, refreshing, error, fromCache, cachedAt, refresh, revalidate } =
+    useKharchaList();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+
+  // Realtime keeps the list live, but the socket can drop while the app is
+  // backgrounded; a silent refetch on every return to this screen covers the
+  // add/edit/delete round-trips regardless.
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false; // the hook's initial load already ran
+        return;
+      }
+      revalidate();
+    }, [revalidate]),
+  );
 
   const summary = useMemo(() => summarizeThisMonth(items, userId, new Date()), [items, userId]);
   const categories = useMemo(() => [...new Set(items.map(item => item.category))], [items]);

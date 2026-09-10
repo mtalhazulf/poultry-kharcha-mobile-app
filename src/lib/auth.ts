@@ -207,7 +207,13 @@ export async function signUpWithPassword(
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  let { error } = await supabase.auth.signOut();
+  if (error && AppError.from(error).kind === 'network') {
+    // Server unreachable: supabase-js keeps the local session in that case,
+    // which would trap the user on this device. Drop it locally instead; the
+    // refresh token simply expires server-side.
+    ({ error } = await supabase.auth.signOut({ scope: 'local' }));
+  }
   if (isGoogleSignInConfigured()) {
     try {
       configureGoogleSignIn();

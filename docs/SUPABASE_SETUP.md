@@ -84,8 +84,15 @@ read-only regardless of what the UI shows.
 ### Realtime
 
 `kharcha` and `kharcha_shares` are added to the `supabase_realtime`
-publication with `replica identity full` (so DELETE events carry the old
-row). Realtime enforces RLS per subscriber.
+publication. Realtime enforces RLS per subscriber for INSERT/UPDATE, but it
+**cannot** for DELETE (the row is gone), so DELETE events go to every
+subscriber. Replica identity is therefore left at DEFAULT: a DELETE payload
+carries only the primary key, never the deleted row's contents.
+
+> Email confirmation links redirect to `kharcha://auth/callback` with a PKCE
+> `code`. That exchange only succeeds on the device that started the sign-up
+> (it holds the code verifier). Opening the link elsewhere shows an auth error
+> in the app, but the account is confirmed — signing in with the password works.
 
 ## Auth configuration checklist (dashboard)
 

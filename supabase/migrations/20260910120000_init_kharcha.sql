@@ -268,8 +268,9 @@ grant select, insert, delete          on public.kharcha_shares to authenticated;
 -- rows they may read.
 -- ---------------------------------------------------------------------------
 
-alter table public.kharcha        replica identity full;
-alter table public.kharcha_shares replica identity full;
+-- NOTE: replica identity stays DEFAULT (primary key only). Realtime cannot
+-- apply RLS to DELETE events, so FULL would broadcast deleted rows' contents
+-- to every subscriber. See 20260910150000_realtime_replica_identity_default.
 
 do $$
 begin

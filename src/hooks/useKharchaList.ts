@@ -30,6 +30,8 @@ export interface KharchaListState {
   /** ISO timestamp of the cache snapshot currently shown, if any. */
   cachedAt: string | null;
   refresh(): Promise<void>;
+  /** Refetch without touching `refreshing` — for focus/foreground revalidation. */
+  revalidate(): Promise<void>;
 }
 
 const SHARES_REFETCH_DEBOUNCE_MS = 300;
@@ -206,7 +208,8 @@ export function useKharchaList(): KharchaListState {
 
     const onKharchaChange = (payload: RealtimePostgresChangesPayload<KharchaRow>) => {
       if (payload.eventType === 'DELETE') {
-        // replica identity FULL, so `old` carries the whole row incl. id.
+        // Replica identity is DEFAULT (primary key only) on purpose: Realtime
+        // cannot apply RLS to DELETE events, so `old` must not carry row data.
         const id = payload.old.id;
         if (typeof id === 'string') {
           patchItems(uid, prev => removeKharcha(prev, id));
@@ -272,5 +275,13 @@ export function useKharchaList(): KharchaListState {
     await fetchList(uid, 'refresh');
   }, [fetchList]);
 
-  return { items, loading, refreshing, error, fromCache, cachedAt, refresh };
+  const revalidate = useCallback(async () => {
+    const uid = userIdRef.current;
+    if (!uid) {
+      return;
+    }
+    await fetchList(uid, 'silent');
+  }, [fetchList]);
+
+  return { items, loading, refreshing, error, fromCache, cachedAt, refresh, revalidate };
 }
