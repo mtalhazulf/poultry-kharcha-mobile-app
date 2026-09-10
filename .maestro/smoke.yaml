@@ -61,7 +61,7 @@ appId: com.kharcha.app
 - hideKeyboard
 - takeScreenshot: 04-form-amount
 - tapOn:
-    id: "category-Food"
+    id: "category-Feed"
 # The note field sits below the category grid; scroll it into view first.
 - scrollUntilVisible:
     element:

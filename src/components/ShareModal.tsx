@@ -168,7 +168,7 @@ export function ShareModal({
 
   let hint: string | null = null;
   if (trimmed.length < MIN_QUERY) {
-    hint = 'Type at least 2 letters of their email to search.';
+    hint = "Type a colleague's email (2+ letters)";
   } else if (!searching && !searchError && results.length === 0) {
     hint = 'No one found with that email.';
   }
@@ -183,7 +183,7 @@ export function ShareModal({
       <View style={styles.sheet}>
         <View style={[styles.body, { paddingTop: Math.max(insets.top, spacing.lg) }]}>
           <View style={styles.header}>
-            <Text style={styles.title}>👥 Share with</Text>
+            <Text style={styles.title}>👥 Share with a colleague</Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close"

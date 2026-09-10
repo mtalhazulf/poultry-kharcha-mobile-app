@@ -1,24 +1,20 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCategories } from '../hooks/useCategories';
 import { colors, radius, spacing, typography } from '../theme';
-import { CATEGORY_TILES, type CategoryMeta } from '../theme/categories';
-import { CATEGORIES } from '../types/models';
-import { IconCircle, TextField } from './ui';
+import { getCategoryMeta, type CategoryMeta } from '../theme/categories';
+import { IconCircle } from './ui';
 
 interface CategoryPickerProps {
-  /** The stored `category`: a preset name, or free text when "Other" is chosen. */
+  /** The stored `category` name; empty means "not chosen yet". */
   value: string;
-  onChange(value: string): void;
+  /** The stored `category_icon` — used to draw a value no longer in the org list. */
+  icon: string | null;
+  onChange(next: { name: string; icon: string }): void;
   error?: string | null;
 }
 
-const OTHER = 'Other';
-const PRESETS: readonly string[] = CATEGORIES;
 const PER_ROW = 3;
-
-function isPreset(value: string): boolean {
-  return PRESETS.includes(value);
-}
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -27,8 +23,6 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   }
   return rows;
 }
-
-const ROWS = chunk(CATEGORY_TILES, PER_ROW);
 
 function Tile({
   meta,
@@ -66,26 +60,36 @@ function Tile({
 }
 
 /**
- * Grid of emoji category tiles (three per row). Selecting "Other" reveals a
- * text field; the stored value becomes the custom text when provided,
- * otherwise plain "Other".
+ * Grid of emoji tiles (three per row) built from the org's category list.
+ * Tiles render immediately from the cache / built-in defaults, so there is
+ * no spinner. A value that is no longer in the list (an old row, or a type an
+ * admin renamed or retired) is shown as an extra selected tile using the icon
+ * frozen on the row, so editing never silently loses the category.
  */
-export function CategoryPicker({ value, onChange, error }: CategoryPickerProps) {
-  // Empty means "not chosen yet": no tile highlighted, no custom field.
-  const otherSelected = value === OTHER || (value !== '' && !isPreset(value));
-  const customText = otherSelected && value !== OTHER ? value : '';
+export function CategoryPicker({ value, icon, onChange, error }: CategoryPickerProps) {
+  const { categories } = useCategories();
+
+  const tiles = useMemo(() => {
+    const active = categories.filter(c => c.active).map(c => getCategoryMeta(c.name, c.emoji));
+    if (value !== '' && !active.some(t => t.name === value)) {
+      active.push(getCategoryMeta(value, icon));
+    }
+    return active;
+  }, [categories, value, icon]);
+
+  const rows = useMemo(() => chunk(tiles, PER_ROW), [tiles]);
 
   return (
     <View style={styles.container}>
       <View style={styles.grid}>
-        {ROWS.map((row, rowIndex) => (
+        {rows.map((row, rowIndex) => (
           <View key={rowIndex} style={styles.row}>
             {row.map(meta => (
               <Tile
                 key={meta.name}
                 meta={meta}
-                selected={meta.name === OTHER ? otherSelected : value === meta.name}
-                onPress={() => onChange(meta.name)}
+                selected={value === meta.name}
+                onPress={() => onChange({ name: meta.name, icon: meta.emoji })}
               />
             ))}
             {row.length < PER_ROW
@@ -96,17 +100,6 @@ export function CategoryPicker({ value, onChange, error }: CategoryPickerProps) 
           </View>
         ))}
       </View>
-      {otherSelected ? (
-        <TextField
-          icon="✏️"
-          placeholder="Type a name, e.g. Gifts"
-          value={customText}
-          onChangeText={text => onChange(text.length > 0 ? text : OTHER)}
-          autoCapitalize="words"
-          maxLength={40}
-          containerStyle={styles.custom}
-        />
-      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -134,6 +127,5 @@ const styles = StyleSheet.create({
   tileLabel: { ...typography.label, color: colors.text, textAlign: 'center' },
   tileLabelSelected: { color: colors.primary },
   spacer: { flex: 1 },
-  custom: { marginTop: spacing.md, marginBottom: 0 },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
 });

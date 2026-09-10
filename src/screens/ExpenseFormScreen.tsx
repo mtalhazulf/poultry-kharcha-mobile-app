@@ -61,7 +61,10 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
   const [loadError, setLoadError] = useState<AppError | null>(null);
 
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState<{ name: string; icon: string | null }>({
+    name: '',
+    icon: null,
+  });
   const [note, setNote] = useState('');
   const [date, setDate] = useState<Date>(() => new Date());
   const [showPicker, setShowPicker] = useState(false);
@@ -92,7 +95,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
       const row = await getKharcha(kharchaId);
       setExisting(row);
       setAmount(row.amount.toFixed(2));
-      setCategory(row.category);
+      setCategory({ name: row.category, icon: row.category_icon });
       setNote(row.note ?? '');
       setDate(parseDate(row.expense_date));
     } catch (err) {
@@ -141,7 +144,7 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     if (!AMOUNT_RE.test(trimmedAmount) || !(value > 0)) {
       errors.amount = 'Enter an amount greater than 0 with at most 2 decimals.';
     }
-    if (!category.trim()) {
+    if (!category.name.trim()) {
       errors.category = 'Pick a category.';
     }
     setFieldErrors(errors);
@@ -150,7 +153,8 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     }
     return {
       amount: value,
-      category: category.trim(),
+      category: category.name.trim(),
+      category_icon: category.icon,
       note: note.trim() || null,
       expense_date: toIsoDate(date),
     };
@@ -288,12 +292,13 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
         <View style={styles.block}>
           <Text style={styles.label}>What for?</Text>
           <CategoryPicker
-            value={category}
-            onChange={value => {
+            value={category.name}
+            icon={category.icon}
+            onChange={next => {
               if (locked) {
                 return;
               }
-              setCategory(value);
+              setCategory(next);
               if (fieldErrors.category) {
                 setFieldErrors(prev => ({ ...prev, category: undefined }));
               }

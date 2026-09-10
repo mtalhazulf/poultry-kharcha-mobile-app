@@ -24,6 +24,28 @@ interface FieldErrors {
   confirm?: string | null;
 }
 
+/** The text of an error, or of the error it wraps, when either mentions `needle`. */
+function findMessage(err: unknown, needle: RegExp, depth = 0): string | null {
+  if (typeof err !== 'object' || err === null || depth > 3) {
+    return null;
+  }
+  const { message, cause } = err as { message?: unknown; cause?: unknown };
+  if (typeof message === 'string' && needle.test(message)) {
+    return message;
+  }
+  return findMessage(cause, needle, depth + 1);
+}
+
+/**
+ * The database rejects uninvited emails with a permission error whose text
+ * ("This app is invite-only. Ask your admin to add …") is already written for
+ * the user, so keep it instead of the generic "no permission" wording.
+ */
+function toSignUpError(err: unknown): AppError {
+  const inviteMessage = findMessage(err, /invite-only/i);
+  return inviteMessage ? new AppError('permission', inviteMessage, err) : AppError.from(err);
+}
+
 export default function SignUpScreen({ navigation }: Props) {
   const { signUpWithPassword } = useAuth();
   const insets = useSafeAreaInsets();
@@ -64,7 +86,7 @@ export default function SignUpScreen({ navigation }: Props) {
       }
       // Otherwise the session exists and the navigator switches stacks.
     } catch (err) {
-      setError(AppError.from(err));
+      setError(toSignUpError(err));
     } finally {
       setSubmitting(false);
     }
@@ -128,6 +150,7 @@ export default function SignUpScreen({ navigation }: Props) {
           </Text>
         </View>
 
+        <InfoBanner icon="🔒" message="Staff only. Your admin must add your email first." />
         <ErrorBanner message={error?.message} kind={error?.kind} onDismiss={() => setError(null)} />
 
         <TextField

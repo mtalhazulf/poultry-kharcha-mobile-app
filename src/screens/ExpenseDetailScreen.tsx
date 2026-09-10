@@ -176,7 +176,7 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  const meta = getCategoryMeta(kharcha.category);
+  const meta = getCategoryMeta(kharcha.category, kharcha.category_icon);
 
   return (
     <View style={styles.flex}>

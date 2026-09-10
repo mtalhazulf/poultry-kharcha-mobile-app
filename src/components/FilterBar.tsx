@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadow, spacing, toIsoDate, typography } from '../theme';
 import { getCategoryMeta } from '../theme/categories';
-import { CATEGORIES, type Kharcha } from '../types/models';
+import type { Kharcha } from '../types/models';
 import { Button, Chip, Segmented, type SegmentOption } from './ui';
 
 export type OwnershipFilter = 'all' | 'mine' | 'shared';
@@ -121,7 +121,7 @@ export function OwnershipToggle({ value, onChange }: OwnershipToggleProps) {
 export interface FilterSheetProps {
   visible: boolean;
   filters: Filters;
-  /** Categories present in the data; merged with the built-in CATEGORIES. */
+  /** Category names present in the loaded data (the org list can change; only these are useful to filter by). */
   categories: string[];
   onChange(next: Filters): void;
   onClose(): void;
@@ -130,13 +130,13 @@ export interface FilterSheetProps {
 /** Bottom sheet with the date range and category filters. */
 export function FilterSheet({ visible, filters, categories, onChange, onClose }: FilterSheetProps) {
   const categoryOptions = useMemo(() => {
-    const set = new Set<string>(CATEGORIES);
+    const set = new Set<string>();
     for (const category of categories) {
       if (category.trim()) {
         set.add(category);
       }
     }
-    return [...set];
+    return [...set].sort((a, b) => a.localeCompare(b));
   }, [categories]);
 
   const clear = () =>

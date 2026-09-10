@@ -16,7 +16,7 @@ function ExpenseListItemComponent({ item, isOwner, onPress }: ExpenseListItemPro
   const showSharedWithYou = !isOwner;
   const showShared = isOwner && item.visibility === 'shared';
   const hasReceipt = Boolean(item.receipt_path);
-  const meta = getCategoryMeta(item.category);
+  const meta = getCategoryMeta(item.category, item.category_icon);
 
   return (
     <Pressable
