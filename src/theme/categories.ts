@@ -30,7 +30,7 @@ const PALETTE = [
 function hashName(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i += 1) {
-    h = (h * 31 + name.charCodeAt(i)) | 0;
+    h = (h * 31 + name.charCodeAt(i)) % 2147483647;
   }
   return Math.abs(h);
 }
