@@ -43,7 +43,7 @@ appId: com.kharcha.app
 - takeScreenshot: 02-walkthrough-4
 - tapOn:
     id: "walkthrough-next"
-- assertVisible: "Expense types and staff are managed"
+- assertVisible: "Settings"
 - takeScreenshot: 02-walkthrough-5
 - tapOn:
     id: "walkthrough-next"
