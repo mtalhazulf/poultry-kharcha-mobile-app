@@ -51,7 +51,7 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
   if (localUri) {
     content = (
       <View style={styles.frame} testID="receipt-preview-local">
-        <Image source={{ uri: localUri }} style={styles.image} resizeMode="cover" />
+        <Image source={{ uri: localUri }} style={styles.image} resizeMode="contain" />
       </View>
     );
   } else if (error) {
@@ -91,7 +91,7 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
         <Image
           source={{ uri: url }}
           style={styles.image}
-          resizeMode="cover"
+          resizeMode="contain"
           accessibilityLabel="Receipt image"
           onLoadStart={() => setImageLoading(true)}
           onLoadEnd={() => setImageLoading(false)}
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   container: { gap: spacing.sm },
   frame: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 3 / 4,
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.border,
