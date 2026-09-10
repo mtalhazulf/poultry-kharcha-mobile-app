@@ -155,15 +155,8 @@ jobs:
           emulator-boot-timeout: 900
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
-          script: |
-            adb install -r apk/app-release.apk
-            mkdir -p screenshots maestro-debug
-            cd screenshots
-            if ! maestro test ../.maestro/smoke.yaml -e EMAIL="$SMOKE_EMAIL" -e PASSWORD="$SMOKE_PASSWORD" --debug-output ../maestro-debug; then
-              adb exec-out screencap -p > 99-failure.png || true
-              adb logcat -d -v time > ../maestro-debug/logcat.txt || true
-              exit 1
-            fi
+          # Each line of `script` runs in its own shell, so the driver lives in a file.
+          script: bash scripts/ci-smoke.sh
 
       - uses: actions/upload-artifact@v4
         if: always()
