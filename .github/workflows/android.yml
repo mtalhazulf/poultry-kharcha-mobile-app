@@ -176,13 +176,18 @@ jobs:
       - name: Publish screenshots to the ci-screenshots branch
         if: always()
         run: |
-          if ! ls screenshots/*.png >/dev/null 2>&1; then
+          # Maestro writes takeScreenshot output into its (hidden) test-output
+          # folder under --debug-output, not the cwd; gather PNGs from both.
+          staging="$(mktemp -d)"
+          find screenshots maestro-debug -type f -name '*.png' -exec cp {} "$staging"/ \; 2>/dev/null || true
+          if ! ls "$staging"/*.png >/dev/null 2>&1; then
             echo "No screenshots to publish"
+            find screenshots maestro-debug -type f 2>/dev/null | head -50
             exit 0
           fi
-          staging="$(mktemp -d)"
-          cp screenshots/*.png "$staging"/
-          [ -d maestro-debug ] && cp -r maestro-debug "$staging"/ || true
+          mkdir -p "$staging/logs"
+          find maestro-debug -type f \( -name '*.log' -o -name '*.txt' -o -name '*.json' \) -exec cp {} "$staging/logs"/ \; 2>/dev/null || true
+          ls -la "$staging"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -q --orphan ci-screenshots
