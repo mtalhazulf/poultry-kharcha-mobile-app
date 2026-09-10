@@ -114,7 +114,12 @@ export default function RootNavigator() {
             <Stack.Screen
               name="Dashboard"
               component={DashboardScreen}
-              options={{ title: '💰 Kharcha', headerRight: renderDashboardRight }}
+              options={{
+                title: 'MPS Expense Tracker',
+                // Full name fits beside Help + Settings at 18px.
+                headerTitleStyle: { fontWeight: '800', fontSize: 18, color: colors.text },
+                headerRight: renderDashboardRight,
+              }}
             />
             {walkthroughSeen ? (
               <Stack.Screen

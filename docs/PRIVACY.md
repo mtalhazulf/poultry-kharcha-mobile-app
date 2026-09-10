@@ -1,8 +1,8 @@
-# Kharcha — Privacy Policy
+# MPS Expense Tracker — Privacy Policy
 
 _Last updated: 10 September 2026_
 
-Kharcha is an internal expense-tracking app for staff of a poultry business.
+MPS Expense Tracker is an internal expense-tracking app for staff of a poultry business.
 It is not offered to the general public; accounts are created by invitation
 from the business's administrator only.
 

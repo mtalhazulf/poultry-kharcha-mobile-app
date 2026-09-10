@@ -10,7 +10,7 @@ appId: com.mps.expensetracker
     text: "Wait"
     optional: true
 - extendedWaitUntil:
-    visible: "Kharcha"
+    visible: "MPS Expense Tracker"
     timeout: 60000
 - takeScreenshot: 01-login
 
@@ -27,7 +27,7 @@ appId: com.mps.expensetracker
 
 # First run on this device: the walkthrough shows before the dashboard
 - extendedWaitUntil:
-    visible: "Welcome to Kharcha"
+    visible: "Welcome to MPS Expense Tracker"
     timeout: 45000
 - takeScreenshot: 02-walkthrough-1
 - tapOn:

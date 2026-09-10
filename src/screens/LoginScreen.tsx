@@ -87,7 +87,7 @@ export default function LoginScreen({ navigation }: Props) {
             💰
           </Text>
           <Text style={styles.title} accessibilityRole="header">
-            Kharcha
+            MPS Expense Tracker
           </Text>
           <Text style={styles.tagline}>Keep track of your money</Text>
         </View>
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   hero: { alignItems: 'center', marginBottom: spacing.xxl, gap: spacing.sm },
   heroEmoji: { fontSize: 72, lineHeight: 88 },
-  title: { ...typography.display, color: colors.primary },
+  title: { ...typography.display, color: colors.primary, textAlign: 'center' },
   tagline: { ...typography.body, color: colors.textMuted },
   dividerRow: {
     flexDirection: 'row',

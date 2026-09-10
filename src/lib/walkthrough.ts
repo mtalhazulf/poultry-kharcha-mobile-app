@@ -33,7 +33,7 @@ export interface WalkthroughSlide {
 export const WALKTHROUGH_SLIDES: readonly WalkthroughSlide[] = [
   {
     emoji: '💰',
-    title: 'Welcome to Kharcha',
+    title: 'Welcome to MPS Expense Tracker',
     text: 'Write down what you spend.\nSee where your money goes.',
     bg: '#E1F3EA',
   },

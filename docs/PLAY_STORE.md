@@ -1,6 +1,6 @@
-# Publishing Kharcha to Google Play
+# Publishing MPS Expense Tracker to Google Play
 
-Kharcha is an internal staff app, so the recommended track is **Internal
+MPS Expense Tracker is an internal staff app, so the recommended track is **Internal
 testing** (up to 100 tester emails, no public listing, no review queue) or
 plain **sideloading** of the APK. Production is possible but adds review,
 a public listing and the Data-safety questionnaire.
@@ -42,7 +42,7 @@ a public listing and the Data-safety questionnaire.
 3. **Privacy policy URL** — publish `docs/PRIVACY.md` anywhere public
    (GitHub Pages, your website). Required because the app collects email,
    names and photos.
-4. **Store listing copy** — app name "Kharcha", short description (≤80
+4. **Store listing copy** — app name "MPS Expense Tracker", short description (≤80
    chars), full description, support email, category (Business / Finance).
 5. **Google Sign-In (optional)** — the SHA-1 of the *upload* key **and** of
    the *Play App Signing* key (Play Console → Setup → App signing) both need
@@ -51,7 +51,7 @@ a public listing and the Data-safety questionnaire.
 
 ## Console steps (once the above exists)
 
-1. Create app → "Kharcha", App, Free, accept policies.
+1. Create app → "MPS Expense Tracker", App, Free, accept policies.
 2. **Setup → App signing**: keep Play App Signing on.
 3. **Policy → App content**: privacy policy URL; ads = No; target audience =
    18+; content rating questionnaire (Utility → no sensitive content);
@@ -81,7 +81,7 @@ There is no Play Console MCP/connector, but the workflow can publish for you:
    choose a **service account** (create one in Google Cloud → IAM → Service
    accounts, with a JSON key; enable the *Google Play Android Developer API*
    on that project). Give it **Release to testing tracks** + **View app
-   information** on Kharcha.
+   information** on MPS Expense Tracker.
 2. Upload the **first** AAB manually once (the API cannot create the app or
    its first release).
 3. Add the GitHub secret `PLAY_SERVICE_ACCOUNT_JSON` (the key file contents)
