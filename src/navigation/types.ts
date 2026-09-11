@@ -1,4 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { Category } from '../types/models';
 
 /**
  * Single root stack. The navigator mounts the auth screens when there is no
@@ -15,6 +16,13 @@ export type RootStackParamList = {
   ExpenseForm: { kharchaId?: string } | undefined;
   ExpenseDetail: { kharchaId: string };
   Settings: undefined;
+  /** The org's expense types; admins can open one to edit it. */
+  ExpenseTypes: undefined;
+  /** Omit `category` to add a new type (admins only). */
+  ExpenseTypeEdit: { category?: Category } | undefined;
+  /** Admins: invites, accounts and roles. */
+  Staff: undefined;
+  InviteStaff: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

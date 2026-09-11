@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadow, spacing, touch } from '../theme';
 
 export const FAB_SIZE = touch.fab;
@@ -9,8 +10,15 @@ export interface FabProps {
   accessibilityLabel?: string;
 }
 
-/** Extended "＋ Add" pill pinned to the bottom-right of its parent. */
+/**
+ * Extended "＋ Add" pill pinned to the bottom-right of its parent.
+ *
+ * The app draws edge to edge, so the screen continues under the phone's
+ * navigation bar. The bottom inset lifts the button clear of it: a few dp for
+ * the gesture handle, about 48dp when the phone uses the 3-button bar.
+ */
 export function Fab({ onPress, accessibilityLabel = 'Add expense' }: FabProps) {
+  const insets = useSafeAreaInsets();
   return (
     <Pressable
       accessibilityRole="button"
@@ -18,7 +26,11 @@ export function Fab({ onPress, accessibilityLabel = 'Add expense' }: FabProps) {
       testID="dashboard-fab"
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+      style={({ pressed }) => [
+        styles.fab,
+        { bottom: spacing.lg + insets.bottom },
+        pressed && styles.fabPressed,
+      ]}
     >
       <View style={styles.content} accessible={false}>
         <Text style={styles.plus}>＋</Text>
@@ -32,7 +44,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.lg,
-    bottom: spacing.lg,
     height: FAB_SIZE,
     minWidth: FAB_SIZE,
     paddingHorizontal: spacing.xl,

@@ -147,6 +147,16 @@ appId: com.mps.expensetracker
     visible: ".*Expense types.*"
     timeout: 20000
 - takeScreenshot: 08-settings
+- tapOn:
+    id: "settings-open-types"
+- extendedWaitUntil:
+    visible: "Only an admin can change these"
+    timeout: 20000
+- takeScreenshot: 09-expense-types
+- back
+- extendedWaitUntil:
+    id: "settings-open-types"
+    timeout: 20000
 - back
 - extendedWaitUntil:
     visible: "This month"

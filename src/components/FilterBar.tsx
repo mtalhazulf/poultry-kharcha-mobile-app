@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadow, spacing, toIsoDate, typography } from '../theme';
 import { getCategoryMeta } from '../theme/categories';
 import type { Kharcha } from '../types/models';
@@ -129,6 +130,7 @@ export interface FilterSheetProps {
 
 /** Bottom sheet with the date range and category filters. */
 export function FilterSheet({ visible, filters, categories, onChange, onClose }: FilterSheetProps) {
+  const insets = useSafeAreaInsets();
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
     for (const category of categories) {
@@ -161,7 +163,13 @@ export function FilterSheet({ visible, filters, categories, onChange, onClose }:
           accessibilityRole="button"
           accessibilityLabel="Close filters"
         />
-        <View style={styles.sheet} testID="filter-sheet">
+        <View
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.sm },
+          ]}
+          testID="filter-sheet"
+        >
           <View style={styles.handle} accessible={false} />
           <Text style={styles.sheetTitle} accessibilityRole="header">
             ⚙️ Filters
@@ -233,7 +241,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg + 4,
     borderTopRightRadius: radius.lg + 4,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
     maxHeight: '85%',
     ...shadow.fab,
   },

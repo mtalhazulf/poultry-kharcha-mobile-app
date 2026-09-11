@@ -305,6 +305,14 @@ export function Badge({
   );
 }
 
+export function RoleBadge({ role }: { role: 'admin' | 'member' }) {
+  return role === 'admin' ? (
+    <Badge label="Admin" icon="🛡️" tone="mine" />
+  ) : (
+    <Badge label="Member" icon="👤" tone="neutral" />
+  );
+}
+
 export function Chip({
   label,
   icon,

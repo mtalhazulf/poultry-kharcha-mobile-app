@@ -15,6 +15,10 @@ adb shell settings put global window_animation_scale 0 || true
 adb shell settings put global transition_animation_scale 0 || true
 adb shell settings put global animator_duration_scale 0 || true
 
+# Many staff phones use the 3-button navigation bar, which is taller than the
+# gesture handle. Run with it so screenshots catch anything it would cover.
+adb shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton || true
+
 adb install -r apk/app-release.apk
 
 # Seed the emulator gallery with a sample receipt so the flow can exercise

@@ -8,9 +8,13 @@ import { hasSeenWalkthrough } from '../lib/walkthrough';
 import DashboardScreen from '../screens/DashboardScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import ExpenseFormScreen from '../screens/ExpenseFormScreen';
+import ExpenseTypeEditScreen from '../screens/ExpenseTypeEditScreen';
+import ExpenseTypesScreen from '../screens/ExpenseTypesScreen';
+import InviteStaffScreen from '../screens/InviteStaffScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import SignUpScreen from '../screens/SignUpScreen';
+import StaffScreen from '../screens/StaffScreen';
 import WalkthroughScreen from '../screens/WalkthroughScreen';
 import { colors, spacing } from '../theme';
 import type { RootStackParamList } from './types';
@@ -144,6 +148,24 @@ export default function RootNavigator() {
               name="Settings"
               component={SettingsScreen}
               options={{ title: '⚙️ Settings' }}
+            />
+            <Stack.Screen
+              name="ExpenseTypes"
+              component={ExpenseTypesScreen}
+              options={{ title: 'Expense types' }}
+            />
+            <Stack.Screen
+              name="ExpenseTypeEdit"
+              component={ExpenseTypeEditScreen}
+              options={({ route }) => ({
+                title: route.params?.category ? 'Edit type' : 'New type',
+              })}
+            />
+            <Stack.Screen name="Staff" component={StaffScreen} options={{ title: 'Staff' }} />
+            <Stack.Screen
+              name="InviteStaff"
+              component={InviteStaffScreen}
+              options={{ title: 'Invite' }}
             />
           </>
         ) : (

@@ -1,6 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExpenseListItem } from '../components/ExpenseListItem';
 import { Fab, FAB_SIZE } from '../components/Fab';
 import {
@@ -62,6 +63,7 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
     useKharchaList();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Realtime keeps the list live, but the socket can drop while the app is
   // backgrounded; a silent refetch on every return to this screen covers the
@@ -190,7 +192,12 @@ function DashboardContent({ userId, navigation }: { userId: string } & Pick<Prop
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
         ItemSeparatorComponent={Separator}
-        contentContainerStyle={[styles.content, visible.length === 0 && styles.contentEmpty]}
+        contentContainerStyle={[
+          styles.content,
+          // Room for the Add button, which sits above the navigation bar.
+          { paddingBottom: FAB_SIZE + spacing.xl * 2 + insets.bottom },
+          visible.length === 0 && styles.contentEmpty,
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[colors.primary]} />
         }
@@ -214,11 +221,7 @@ function Separator() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: FAB_SIZE + spacing.xl * 2,
-  },
+  content: { paddingVertical: spacing.lg, paddingHorizontal: spacing.lg },
   contentEmpty: { flexGrow: 1 },
   header: { gap: spacing.md, marginBottom: spacing.md },
   banner: { marginBottom: 0 },
