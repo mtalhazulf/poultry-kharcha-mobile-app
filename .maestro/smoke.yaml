@@ -155,7 +155,8 @@ appId: com.mps.expensetracker
 - takeScreenshot: 09-expense-types
 - back
 - extendedWaitUntil:
-    id: "settings-open-types"
+    visible:
+      id: "settings-open-types"
     timeout: 20000
 - back
 - extendedWaitUntil:
