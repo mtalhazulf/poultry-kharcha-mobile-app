@@ -14,8 +14,13 @@ module.exports = {
     // ignores package `exports`.
     '^@react-native-async-storage/async-storage$':
       '<rootDir>/node_modules/@react-native-async-storage/async-storage/lib/module/jest/AsyncStorageMock.js',
+    // lucide's "react-native" entry is untranspiled .mjs; the CJS build runs as-is
+    // (and keeps babel from transforming ~3,700 icon modules).
+    '^lucide-react-native$':
+      '<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js',
   },
-  // Everything RN-flavoured ships untranspiled ESM/Flow and must go through babel.
+  // Everything RN-flavoured ships untranspiled ESM/Flow and must go through babel
+  // (react-native-* also covers svg, reanimated, worklets, keychain, keyboard-controller).
   transformIgnorePatterns: [
     'node_modules/(?!(?:jest-)?react-native|@react-native|@react-navigation|@supabase)',
   ],

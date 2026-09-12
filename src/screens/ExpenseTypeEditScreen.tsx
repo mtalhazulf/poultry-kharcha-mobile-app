@@ -1,258 +1,314 @@
 /**
- * Add or change one expense type (admins). The big preview shows how the type
- * will look on the Add-expense screen. RLS rejects writes from anyone who is
- * not an admin; this screen is only linked from admin controls.
+ * Add or edit one expense type (admins). The preview shows the tile as it
+ * appears in pickers and lists. Visibility is saved with the rest of the form.
+ * The database enforces admin-only writes and unique names; its messages
+ * (for example a duplicate name) are shown on the field.
  */
-import React, { useCallback, useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 import { addCategory, removeCategory, updateCategory } from '../api/categories';
-import { Button, ErrorBanner, IconCircle, TextField } from '../components/ui';
+import { IconChoiceGrid } from '../components/settings/IconChoiceGrid';
+import { useOrg } from '../context/OrgProvider';
+import { useCategories } from '../hooks/useCategories';
 import { AppError } from '../lib/errors';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, radius, spacing, typography } from '../theme';
-import { EMOJI_CHOICES, categoryBg } from '../theme/categories';
+import { spacing } from '../theme';
+import { categoryTint, iconForCategory, type CategoryIconName } from '../theme/categories';
+import type { Category } from '../types/models';
+import {
+  AppText,
+  Badge,
+  Banner,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  IconTile,
+  ListGroup,
+  ListItem,
+  LoadingView,
+  Screen,
+  SectionHeader,
+  TextField,
+  Toggle,
+} from '../ui';
 
 type Props = RootStackScreenProps<'ExpenseTypeEdit'>;
-type BusyAction = 'save' | 'toggle' | 'remove';
+type Busy = 'save' | 'remove';
+
+interface Draft {
+  name: string;
+  icon: CategoryIconName;
+  active: boolean;
+}
+
+const NEW_DRAFT: Draft = { name: '', icon: 'package', active: true };
+
+function draftFrom(category: Category): Draft {
+  return {
+    name: category.name,
+    icon: iconForCategory(category.name, category.icon),
+    active: category.active,
+  };
+}
 
 export default function ExpenseTypeEditScreen({ navigation, route }: Props) {
-  const existing = route.params?.category;
-  const insets = useSafeAreaInsets();
-  const [name, setName] = useState(existing?.name ?? '');
-  const [emoji, setEmoji] = useState(existing?.emoji ?? '📦');
-  const [custom, setCustom] = useState(
-    existing && !EMOJI_CHOICES.includes(existing.emoji) ? existing.emoji : '',
-  );
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<BusyAction | null>(null);
-  const [error, setError] = useState<AppError | null>(null);
-  const locked = busy !== null;
+  const categoryId = route.params?.categoryId;
+  const editing = categoryId !== undefined;
+  const { activeOrg, isAdmin } = useOrg();
+  const orgId = activeOrg?.id ?? null;
+  // Only an existing type needs the list (hidden types included).
+  const {
+    categories,
+    loading,
+    error: loadError,
+    refresh,
+  } = useCategories(editing ? orgId : null, { includeInactive: true });
+  const existing = editing ? categories.find(category => category.id === categoryId) ?? null : null;
 
-  /** Runs one write and leaves the screen on success; the list refreshes on focus. */
-  const run = useCallback(
-    async (kind: BusyAction, action: () => Promise<unknown>) => {
-      setBusy(kind);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
+  const [busy, setBusy] = useState<Busy | null>(null);
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const form: Draft = draft ?? (existing ? draftFrom(existing) : NEW_DRAFT);
+  const locked = !isAdmin || busy !== null;
+
+  const update = useCallback(
+    (patch: Partial<Draft>) => setDraft(current => ({ ...(current ?? form), ...patch })),
+    [form],
+  );
+
+  const save = useCallback(async () => {
+    if (!orgId || !isAdmin || busy) {
+      return;
+    }
+    const name = form.name.trim();
+    if (!name) {
+      setNameError('Enter a name for this expense type.');
+      return;
+    }
+    setBusy('save');
+    setError(null);
+    setNameError(null);
+    try {
+      if (existing) {
+        const patch: { name?: string; icon?: string; active?: boolean } = {};
+        if (name !== existing.name) {
+          patch.name = name;
+        }
+        if (form.icon !== existing.icon) {
+          patch.icon = form.icon;
+        }
+        if (form.active !== existing.active) {
+          patch.active = form.active;
+        }
+        await updateCategory(existing.id, patch);
+      } else {
+        await addCategory(orgId, { name, icon: form.icon });
+      }
+      if (mounted.current) {
+        navigation.goBack();
+      }
+    } catch (err) {
+      if (!mounted.current) {
+        return;
+      }
+      const appErr = AppError.from(err);
+      if (appErr.kind === 'validation') {
+        setNameError(appErr.message);
+      } else {
+        setError(appErr);
+      }
+      setBusy(null);
+    }
+  }, [orgId, isAdmin, busy, form, existing, navigation]);
+
+  const remove = useCallback(
+    async (id: string) => {
+      setBusy('remove');
       setError(null);
       try {
-        await action();
-        navigation.goBack();
+        await removeCategory(id);
+        if (mounted.current) {
+          navigation.goBack();
+        }
       } catch (err) {
-        setError(AppError.from(err));
-        setBusy(null);
+        if (mounted.current) {
+          setError(AppError.from(err));
+          setBusy(null);
+        }
       }
     },
     [navigation],
   );
 
-  const save = () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setNameError('Type a name for this expense type.');
+  const confirmRemove = useCallback(() => {
+    if (!existing || busy) {
       return;
     }
-    run('save', () =>
-      existing
-        ? updateCategory(existing.id, { name: trimmed, emoji })
-        : addCategory({ name: trimmed, emoji }),
-    );
-  };
-
-  const toggleHidden = () => {
-    if (existing) {
-      run('toggle', () => updateCategory(existing.id, { active: !existing.active }));
-    }
-  };
-
-  const confirmRemove = () => {
-    if (!existing) {
-      return;
-    }
-    Alert.alert('Remove this type?', 'Old expenses keep their name and picture.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          run('remove', () => removeCategory(existing.id));
+    Alert.alert(
+      `Remove ${existing.name}?`,
+      'Past expenses keep this type name and icon. To keep it for later, hide it instead.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            remove(existing.id);
+          },
         },
-      },
-    ]);
-  };
+      ],
+    );
+  }, [existing, busy, remove]);
 
-  const pickChoice = (choice: string) => {
-    setEmoji(choice);
-    setCustom('');
-  };
-
-  const typeCustom = (value: string) => {
-    setCustom(value);
-    const trimmed = value.trim();
-    if (trimmed) {
-      setEmoji(trimmed);
+  if (editing && !existing) {
+    if (loading) {
+      return (
+        <Screen testID="type-edit">
+          <LoadingView message="Loading expense type" />
+        </Screen>
+      );
     }
-  };
+    return (
+      <Screen gap={spacing.xxl} testID="type-edit">
+        {loadError ? (
+          <ErrorBanner
+            message={loadError.message}
+            kind={loadError.kind}
+            onRetry={() => {
+              refresh();
+            }}
+          />
+        ) : (
+          <EmptyState
+            fill
+            icon="list"
+            title="This expense type is gone"
+            message="Someone may have removed it."
+            action={{ label: 'Back to expense types', onPress: () => navigation.goBack() }}
+          />
+        )}
+      </Screen>
+    );
+  }
+
+  const trimmedName = form.name.trim();
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <Screen
+      keyboard
+      gap={spacing.xxl}
+      footer={
+        isAdmin ? (
+          <Button
+            title="Save"
+            onPress={save}
+            loading={busy === 'save'}
+            disabled={busy !== null}
+            fullWidth
+            testID="type-save"
+          />
+        ) : undefined
+      }
+      testID="type-edit"
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+      {isAdmin ? null : <Banner tone="info" icon="lock" message="Only an admin can change these" />}
+      <ErrorBanner message={error?.message} kind={error?.kind} onDismiss={() => setError(null)} />
+
+      <Card
+        style={styles.preview}
+        accessible
+        accessibilityLabel={`Preview, ${trimmedName || 'New expense type'}`}
       >
-        <ErrorBanner message={error?.message} kind={error?.kind} onDismiss={() => setError(null)} />
+        <IconTile icon={form.icon} tint={categoryTint(trimmedName || 'New type')} size="lg" />
+        <AppText
+          variant="headline"
+          color={trimmedName ? 'text' : 'textTertiary'}
+          numberOfLines={1}
+          style={styles.previewName}
+        >
+          {trimmedName || 'New expense type'}
+        </AppText>
+        {existing && !form.active ? <Badge label="Hidden" tone="neutral" /> : null}
+      </Card>
 
-        <View style={styles.preview}>
-          <IconCircle emoji={emoji} bg={categoryBg(name.trim() || 'new')} size={88} />
-          <Text style={styles.previewName} numberOfLines={1}>
-            {name.trim() || 'New type'}
-          </Text>
-        </View>
+      <TextField
+        label="Name"
+        value={form.name}
+        onChangeText={text => {
+          update({ name: text });
+          if (nameError) {
+            setNameError(null);
+          }
+        }}
+        placeholder="For example, Feed"
+        autoFocus={!editing}
+        autoCapitalize="words"
+        maxLength={40}
+        returnKeyType="done"
+        submitBehavior="blurAndSubmit"
+        onSubmitEditing={save}
+        error={nameError}
+        editable={!locked}
+        testID="type-name"
+      />
 
-        <TextField
-          label="Name"
-          icon="✏️"
-          placeholder="e.g. Feed"
-          value={name}
-          onChangeText={text => {
-            setName(text);
-            if (nameError) {
-              setNameError(null);
-            }
-          }}
-          autoCapitalize="words"
-          maxLength={40}
-          error={nameError}
-          editable={!locked}
-          testID="type-name"
-        />
-
-        <Text style={styles.label}>Picture</Text>
-        <View style={styles.emojiGrid}>
-          {EMOJI_CHOICES.map(choice => {
-            const selected = emoji === choice;
-            return (
-              <Pressable
-                key={choice}
-                accessibilityRole="button"
-                accessibilityLabel={`Picture ${choice}`}
-                accessibilityState={{ selected }}
-                onPress={() => pickChoice(choice)}
-                disabled={locked}
-                style={({ pressed }) => [
-                  styles.emojiCell,
-                  selected && styles.emojiCellSelected,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.emojiText}>{choice}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <TextField
-          icon="⌨️"
-          placeholder="Or type any emoji"
-          value={custom}
-          onChangeText={typeCustom}
-          maxLength={8}
-          autoCorrect={false}
-          editable={!locked}
-        />
-
-        {existing ? (
-          <View style={styles.more}>
-            <Text style={styles.label}>More</Text>
-            <Button
-              icon={existing.active ? '🙈' : '👁️'}
-              title={existing.active ? 'Hide this type' : 'Show this type'}
-              variant="secondary"
-              loading={busy === 'toggle'}
-              disabled={locked}
-              onPress={toggleHidden}
-            />
-            <Text style={styles.caption}>
-              {existing.active
-                ? "Hidden types can't be picked for new expenses."
-                : 'It will show on the Add screen again.'}
-            </Text>
-            <Button
-              icon="🗑️"
-              title="Remove type"
-              variant="danger"
-              loading={busy === 'remove'}
-              disabled={locked}
-              onPress={confirmRemove}
-              style={styles.remove}
-            />
-          </View>
-        ) : null}
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-        <Button
-          size="lg"
-          icon="✅"
-          title={existing ? 'Save changes' : 'Add type'}
-          loading={busy === 'save'}
-          disabled={locked}
-          onPress={save}
-          testID="type-save"
-        />
+      <View style={styles.section}>
+        <SectionHeader title="Icon" />
+        <IconChoiceGrid value={form.icon} onChange={icon => update({ icon })} disabled={locked} />
       </View>
-    </KeyboardAvoidingView>
+
+      {existing ? (
+        <>
+          <ListGroup>
+            <ListItem
+              title="Visible in lists"
+              subtitle={
+                form.active
+                  ? 'People can pick this type for new expenses.'
+                  : 'Hidden from new expenses. Past expenses keep it.'
+              }
+              subtitleLines={2}
+              trailing={
+                <Toggle
+                  value={form.active}
+                  onValueChange={active => update({ active })}
+                  disabled={locked}
+                  accessibilityLabel="Visible in lists"
+                  testID="type-visible"
+                />
+              }
+            />
+          </ListGroup>
+          {isAdmin ? (
+            <Button
+              title="Remove type"
+              icon="trash"
+              variant="danger"
+              onPress={confirmRemove}
+              loading={busy === 'remove'}
+              disabled={busy !== null}
+              testID="type-remove"
+            />
+          ) : null}
+        </>
+      ) : null}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  preview: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  previewName: { ...typography.heading },
-  label: { ...typography.label, marginBottom: spacing.sm },
-  caption: { ...typography.caption },
-  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  emojiCell: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiCellSelected: {
-    borderWidth: 2.5,
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  pressed: { opacity: 0.7 },
-  emojiText: { fontSize: 28 },
-  more: { gap: spacing.sm, marginTop: spacing.sm },
-  remove: { marginTop: spacing.md },
-  footer: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
+  preview: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  previewName: { flex: 1 },
+  section: { gap: spacing.sm },
 });

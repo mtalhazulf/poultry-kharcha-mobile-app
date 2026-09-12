@@ -2,6 +2,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Biometric sign-in (react-native-keychain -> BiometricPrompt). Install-time
+         permission; the library also merges USE_FINGERPRINT for API < 28. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- Receipt capture (react-native-image-picker launchCamera). Runtime-requested. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Gallery selection goes through the Android Photo Picker, which needs
@@ -57,6 +61,29 @@
                 android:host="auth"
                 android:pathPrefix="/callback" />
         </intent-filter>
+        <!-- Widget/deep-link entry point: kharcha://expense/new or
+             kharcha://expense/<id>, resolved by RootNavigator's linking config. -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="kharcha"
+                android:host="expense" />
+        </intent-filter>
       </activity>
+
+      <!-- Home-screen widget: quick-add / recent-entries (src/widgets). -->
+      <receiver
+          android:name=".widget.MpsExpenseWidget"
+          android:exported="false"
+          android:label="@string/app_name">
+          <intent-filter>
+              <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <meta-data
+              android:name="android.appwidget.provider"
+              android:resource="@xml/mps_expense_widget_info" />
+      </receiver>
     </application>
 </manifest>

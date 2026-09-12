@@ -1,62 +1,91 @@
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+/**
+ * Create (no `kharchaId`) or edit (with `kharchaId`) an expense. The owner
+ * check that locks the form for others is cosmetic; RLS on `kharcha` and the
+ * `receipts` bucket is what stops them.
+ */
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { createKharcha, getKharcha, updateKharcha } from '../api/kharcha';
 import { CategoryPicker } from '../components/CategoryPicker';
+import { AmountField } from '../components/expenses/AmountField';
+import {
+  amountToInput,
+  buildExpensePatch,
+  parseAmountInput,
+  sanitizeAmountInput,
+} from '../components/expenses/expenseForm';
+import { formatLongDate } from '../components/expenses/expenseListModel';
 import { ReceiptPreview } from '../components/ReceiptPreview';
-import { Button, Chip, ErrorBanner, InfoBanner, LoadingView, TextField } from '../components/ui';
 import { useAuth } from '../context/AuthProvider';
+import { useBiometricLock } from '../context/BiometricLockProvider';
+import { useOrg } from '../context/OrgProvider';
 import { AppError } from '../lib/errors';
+import { getLastCategory, setLastCategory } from '../lib/lastCategory';
 import { deleteReceipt, pickReceipt, uploadReceipt, type PickedFile } from '../lib/receipts';
-import type { RootStackScreenProps } from '../navigation/types';
-import { CURRENCY, colors, formatDateFriendly, spacing, toIsoDate, typography } from '../theme';
-import type { Kharcha, KharchaInput } from '../types/models';
+import type { RootStackParamList } from '../navigation/types';
+import {
+  AppText,
+  Banner,
+  Button,
+  Chip,
+  ErrorBanner,
+  LoadingView,
+  Screen,
+  TextField,
+  type TextFieldRef,
+} from '../ui';
+import { CURRENCY, formatAmount, parseIsoDate, spacing, toIsoDate } from '../theme';
+import type { KharchaInput, KharchaWithOwner, Organization } from '../types/models';
+import { refreshWidget } from '../widgets/widgetTaskHandler';
 
-type Props = RootStackScreenProps<'ExpenseForm'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseForm'>;
 
 interface FieldErrors {
   amount?: string;
   category?: string;
 }
 
-const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
-
-function parseDate(isoDate: string): Date {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  if (!y || !m || !d) {
-    return new Date();
-  }
-  return new Date(y, m - 1, d);
+function isoDaysAgo(days: number): string {
+  const now = new Date();
+  return toIsoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - days));
 }
 
-function daysAgo(from: Date, days: number): Date {
-  const d = new Date(from);
-  d.setDate(from.getDate() - days);
-  return d;
-}
-
-/**
- * Create (no `kharchaId`) or edit (with `kharchaId`) an expense. The owner
- * check that disables the form for non-owners is cosmetic only — RLS on
- * `kharcha` and on the `receipts` bucket is what actually stops them.
- */
 export default function ExpenseFormScreen({ navigation, route }: Props) {
   const kharchaId = route.params?.kharchaId;
-  const isEdit = kharchaId !== undefined;
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
+  const { activeOrg } = useOrg();
 
-  const [existing, setExisting] = useState<Kharcha | null>(null);
+  if (!user || !activeOrg) {
+    return <LoadingView />;
+  }
+  return (
+    <ExpenseForm
+      key={kharchaId ?? 'new'}
+      navigation={navigation}
+      kharchaId={kharchaId}
+      userId={user.id}
+      org={activeOrg}
+    />
+  );
+}
+
+interface FormProps {
+  navigation: Props['navigation'];
+  kharchaId: string | undefined;
+  userId: string;
+  org: Organization;
+}
+
+function ExpenseForm({ navigation, kharchaId, userId, org }: FormProps) {
+  const isEdit = kharchaId !== undefined;
+  const currency = org.currency || CURRENCY;
+  const { suspendRelock } = useBiometricLock();
+  const noteRef = useRef<TextFieldRef>(null);
+  const mountedRef = useRef(true);
+
+  const [existing, setExisting] = useState<KharchaWithOwner | null>(null);
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState<AppError | null>(null);
 
@@ -65,25 +94,23 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     name: '',
     icon: null,
   });
+  const [dateIso, setDateIso] = useState(() => isoDaysAgo(0));
+  const [iosPickerOpen, setIosPickerOpen] = useState(false);
   const [note, setNote] = useState('');
-  const [date, setDate] = useState<Date>(() => new Date());
-  const [showPicker, setShowPicker] = useState(false);
-
   const [picked, setPicked] = useState<PickedFile | null>(null);
   const [receiptRemoved, setReceiptRemoved] = useState(false);
+  const [receiptError, setReceiptError] = useState<AppError | null>(null);
 
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<AppError | null>(null);
 
-  const today = useMemo(() => new Date(), []);
-  const todayIso = useMemo(() => toIsoDate(today), [today]);
-  const yesterdayIso = useMemo(() => toIsoDate(daysAgo(today, 1)), [today]);
-  const isOwner = !isEdit || (existing !== null && user !== null && existing.owner_id === user.id);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: isEdit ? 'Edit expense' : 'New expense' });
-  }, [navigation, isEdit]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     if (!kharchaId) {
@@ -93,15 +120,22 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     setLoadError(null);
     try {
       const row = await getKharcha(kharchaId);
+      if (!mountedRef.current) {
+        return;
+      }
       setExisting(row);
-      setAmount(row.amount.toFixed(2));
+      setAmount(amountToInput(row.amount));
       setCategory({ name: row.category, icon: row.category_icon });
+      setDateIso(row.expense_date);
       setNote(row.note ?? '');
-      setDate(parseDate(row.expense_date));
     } catch (err) {
-      setLoadError(AppError.from(err));
+      if (mountedRef.current) {
+        setLoadError(AppError.from(err));
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [kharchaId]);
 
@@ -109,26 +143,74 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     load();
   }, [load]);
 
-  const onDateChange = useCallback((event: DateTimePickerEvent, selected?: Date) => {
-    // Android's dialog dismisses itself; unmount our instance either way.
-    setShowPicker(false);
-    if (event.type === 'set' && selected) {
-      setDate(selected);
+  // New expense only: default to the type last used for this org, if the
+  // user hasn't already picked one by the time this resolves.
+  useEffect(() => {
+    if (isEdit) {
+      return;
     }
+    let cancelled = false;
+    getLastCategory(org.id).then(last => {
+      if (!cancelled && last) {
+        setCategory(prev => (prev.name === '' ? last : prev));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, org.id]);
+
+  const readOnly = isEdit && existing !== null && existing.owner_id !== userId;
+  const locked = readOnly || saving;
+  const todayIso = isoDaysAgo(0);
+  const yesterdayIso = isoDaysAgo(1);
+  const customDate = dateIso !== todayIso && dateIso !== yesterdayIso;
+
+  const onAmountChange = useCallback((text: string) => {
+    setAmount(sanitizeAmountInput(text));
+    setErrors(prev => (prev.amount ? { ...prev, amount: undefined } : prev));
   }, []);
 
-  const pick = useCallback(async (source: 'camera' | 'gallery') => {
-    setSaveError(null);
-    try {
-      const file = await pickReceipt(source);
-      if (file) {
-        setPicked(file);
-        setReceiptRemoved(false);
-      }
-    } catch (err) {
-      setSaveError(AppError.from(err));
-    }
+  const onCategoryChange = useCallback((next: { name: string; icon: string | null }) => {
+    setCategory(next);
+    setErrors(prev => (prev.category ? { ...prev, category: undefined } : prev));
   }, []);
+
+  const openDatePicker = useCallback(() => {
+    const value = parseIsoDate(dateIso) ?? new Date();
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value,
+        mode: 'date',
+        maximumDate: new Date(),
+        onValueChange: (_event, selected) => setDateIso(toIsoDate(selected)),
+      });
+    } else {
+      setIosPickerOpen(open => !open);
+    }
+  }, [dateIso]);
+
+  const pick = useCallback(
+    async (source: 'camera' | 'gallery') => {
+      setReceiptError(null);
+      try {
+        // The picker is a separate activity, so the app is in the background
+        // while it is open. Without suspendRelock a slow pick comes back to the
+        // Lock screen, which replaces the stack and takes this half-typed form
+        // (and the picked file) with it.
+        const file = await suspendRelock(() => pickReceipt(source));
+        if (file && mountedRef.current) {
+          setPicked(file);
+          setReceiptRemoved(false);
+        }
+      } catch (err) {
+        if (mountedRef.current) {
+          setReceiptError(AppError.from(err));
+        }
+      }
+    },
+    [suspendRelock],
+  );
 
   const removeReceipt = useCallback(() => {
     setPicked(null);
@@ -137,55 +219,56 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
     }
   }, [existing]);
 
-  const validate = useCallback((): KharchaInput | null => {
-    const errors: FieldErrors = {};
-    const trimmedAmount = amount.trim();
-    const value = Number(trimmedAmount);
-    if (!AMOUNT_RE.test(trimmedAmount) || !(value > 0)) {
-      errors.amount = 'Enter an amount greater than 0 with at most 2 decimals.';
-    }
-    if (!category.name.trim()) {
-      errors.category = 'Pick a category.';
-    }
-    setFieldErrors(errors);
-    if (errors.amount || errors.category) {
-      return null;
-    }
-    return {
-      amount: value,
-      category: category.name.trim(),
-      category_icon: category.icon,
-      note: note.trim() || null,
-      expense_date: toIsoDate(date),
-    };
-  }, [amount, category, note, date]);
-
   const submit = useCallback(async () => {
-    const input = validate();
-    if (!input || saving) {
+    if (saving || readOnly) {
       return;
     }
+    const parsed = parseAmountInput(amount);
+    const nextErrors: FieldErrors = {};
+    if (!parsed.ok) {
+      nextErrors.amount = parsed.error;
+    }
+    if (!category.name.trim()) {
+      nextErrors.category = 'Pick an expense type.';
+    }
+    setErrors(nextErrors);
+    if (!parsed.ok || nextErrors.category) {
+      return;
+    }
+
+    const input: KharchaInput = {
+      amount: parsed.value,
+      category: category.name,
+      categoryIcon: category.icon,
+      note: note.trim() || null,
+      expenseDate: dateIso,
+    };
     setSaving(true);
     setSaveError(null);
+
     try {
       if (!isEdit) {
-        const created = await createKharcha(input);
+        const created = await createKharcha(org.id, input);
+        refreshWidget().catch(() => undefined);
+        setLastCategory(org.id, { name: category.name, icon: category.icon }).catch(() => undefined);
         if (picked) {
           try {
             const key = await uploadReceipt(created.id, picked);
-            await updateKharcha(created.id, { receipt_path: key });
+            await updateKharcha(created.id, { receiptPath: key });
           } catch (err) {
-            // The row exists; surface the partial failure but still move on.
+            // The expense exists; say what did not work and still move on.
             const appErr = AppError.from(err);
-            const message = `Expense saved, but the receipt upload failed: ${appErr.message}`;
-            setSaveError(new AppError(appErr.kind, message, err));
-            setSaving(false);
-            Alert.alert('Receipt not uploaded', message, [
-              {
-                text: 'OK',
-                onPress: () => navigation.replace('ExpenseDetail', { kharchaId: created.id }),
-              },
-            ]);
+            Alert.alert(
+              'Receipt not attached',
+              `The expense was saved, but the receipt could not be uploaded. ${appErr.message}`,
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.replace('ExpenseDetail', { kharchaId: created.id }),
+                },
+              ],
+              { cancelable: false },
+            );
             return;
           }
         }
@@ -193,277 +276,235 @@ export default function ExpenseFormScreen({ navigation, route }: Props) {
         return;
       }
 
-      // Edit mode.
-      const id = kharchaId;
-      const oldPath = existing?.receipt_path ?? null;
-      await updateKharcha(id, input);
+      if (!existing || !kharchaId) {
+        return;
+      }
+      const oldPath = existing.receipt_path;
+      let receiptPath: string | null | undefined;
       if (picked) {
-        const key = await uploadReceipt(id, picked);
-        await updateKharcha(id, { receipt_path: key });
-        if (oldPath && oldPath !== key) {
-          // Best effort: an orphaned object is harmless.
-          deleteReceipt(oldPath).catch(() => undefined);
-        }
+        receiptPath = await uploadReceipt(kharchaId, picked);
       } else if (receiptRemoved && oldPath) {
-        await updateKharcha(id, { receipt_path: null });
+        receiptPath = null;
+      }
+      const patch = buildExpensePatch(existing, { ...input, receiptPath });
+      if (Object.keys(patch).length > 0) {
+        await updateKharcha(kharchaId, patch);
+        refreshWidget().catch(() => undefined);
+      }
+      if (oldPath && receiptPath !== undefined && receiptPath !== oldPath) {
+        // Best effort: an orphaned object is harmless.
         deleteReceipt(oldPath).catch(() => undefined);
       }
       navigation.goBack();
     } catch (err) {
-      setSaveError(AppError.from(err));
-      setSaving(false);
+      if (mountedRef.current) {
+        setSaveError(AppError.from(err));
+        setSaving(false);
+      }
     }
-  }, [validate, saving, isEdit, picked, navigation, kharchaId, existing, receiptRemoved]);
+  }, [
+    saving,
+    readOnly,
+    amount,
+    category,
+    note,
+    dateIso,
+    isEdit,
+    org.id,
+    picked,
+    navigation,
+    existing,
+    kharchaId,
+    receiptRemoved,
+  ]);
 
   if (loading) {
-    return <LoadingView message="Loading expense…" />;
+    return <LoadingView message="Loading expense" />;
   }
 
-  if (isEdit && loadError) {
+  if (isEdit && (loadError || !existing)) {
     return (
-      <View style={styles.centered}>
-        <ErrorBanner message={loadError.message} kind={loadError.kind} onRetry={load} />
-        <Button
-          title="Back"
-          icon="↩️"
-          size="lg"
-          variant="secondary"
-          onPress={() => navigation.goBack()}
+      <Screen
+        footer={<Button title="Back" variant="secondary" onPress={() => navigation.goBack()} fullWidth />}
+      >
+        <ErrorBanner
+          message={loadError?.message ?? 'Could not load this expense.'}
+          kind={loadError?.kind}
+          onRetry={load}
         />
-      </View>
+      </Screen>
     );
   }
 
-  const readOnly = !isOwner;
-  const locked = readOnly || saving;
+  const parsedPreview = parseAmountInput(amount);
+  const amountHelper =
+    parsedPreview.ok && parsedPreview.value >= 1000
+      ? formatAmount(parsedPreview.value, currency)
+      : null;
   const previewPath = receiptRemoved ? null : existing?.receipt_path ?? null;
-  const hasReceipt = picked !== null || previewPath !== null;
+  const hasFieldErrors = Boolean(errors.amount || errors.category);
 
-  const dateIso = toIsoDate(date);
-  const isToday = dateIso === todayIso;
-  const isYesterday = dateIso === yesterdayIso;
-  const isOtherDate = !isToday && !isYesterday;
+  const footer = (
+    <>
+      {hasFieldErrors ? (
+        <AppText variant="caption" color="dangerText" align="center">
+          Check the highlighted fields.
+        </AppText>
+      ) : null}
+      <Button
+        title={isEdit ? 'Save changes' : 'Save expense'}
+        onPress={submit}
+        loading={saving}
+        disabled={readOnly}
+        fullWidth
+        testID="form-submit"
+      />
+    </>
+  );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
-        {readOnly ? <InfoBanner icon="🔒" message="Only the owner can edit this expense" /> : null}
-        {saveError ? (
-          <ErrorBanner
-            message={saveError.message}
-            kind={saveError.kind}
-            onDismiss={() => setSaveError(null)}
+    <Screen keyboard footer={footer} gap={spacing.xxl}>
+      {readOnly ? (
+        <Banner
+          tone="neutral"
+          icon="lock"
+          message="Only the person who added this expense can edit it."
+        />
+      ) : null}
+      {saveError ? (
+        <ErrorBanner
+          message={saveError.message}
+          kind={saveError.kind}
+          onDismiss={() => setSaveError(null)}
+        />
+      ) : null}
+
+      <AmountField
+        currency={currency}
+        value={amount}
+        onChangeText={onAmountChange}
+        error={errors.amount}
+        helperText={amountHelper}
+        autoFocus={!isEdit}
+        editable={!locked}
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => noteRef.current?.focus()}
+        testID="form-amount"
+      />
+
+      <View style={styles.field}>
+        <View style={styles.labelRow}>
+          <AppText variant="subhead">Date</AppText>
+          <AppText variant="callout" color="textSecondary" numberOfLines={1} style={styles.dateValue}>
+            {formatLongDate(dateIso)}
+          </AppText>
+        </View>
+        <View style={styles.chips}>
+          <Chip
+            label="Today"
+            selected={dateIso === todayIso}
+            onPress={() => setDateIso(todayIso)}
+            disabled={locked}
+            testID="date-today"
+          />
+          <Chip
+            label="Yesterday"
+            selected={dateIso === yesterdayIso}
+            onPress={() => setDateIso(yesterdayIso)}
+            disabled={locked}
+            testID="date-yesterday"
+          />
+          <Chip
+            label="Pick date"
+            icon="calendar"
+            selected={customDate}
+            onPress={openDatePicker}
+            disabled={locked}
+            testID="date-pick"
+          />
+        </View>
+        {iosPickerOpen && Platform.OS !== 'android' ? (
+          <DateTimePicker
+            value={parseIsoDate(dateIso) ?? new Date()}
+            mode="date"
+            display="inline"
+            maximumDate={new Date()}
+            onValueChange={(_event, selected) => {
+              setDateIso(toIsoDate(selected));
+              setIosPickerOpen(false);
+            }}
+            onDismiss={() => setIosPickerOpen(false)}
           />
         ) : null}
+      </View>
 
-        {/* Amount — the one number that matters, so it is the biggest thing on screen. */}
-        <View style={styles.block}>
-          <Text style={styles.label}>Amount</Text>
-          <View style={[styles.amountRow, fieldErrors.amount ? styles.amountRowError : null]}>
-            <Text style={styles.currency}>{CURRENCY}</Text>
-            <TextInput
-              testID="form-amount"
-              accessibilityLabel="Amount"
-              placeholder="0"
-              placeholderTextColor={colors.textMuted}
-              value={amount}
-              onChangeText={text => {
-                setAmount(text);
-                if (fieldErrors.amount) {
-                  setFieldErrors(prev => ({ ...prev, amount: undefined }));
-                }
-              }}
-              keyboardType="decimal-pad"
-              autoFocus={!isEdit}
-              editable={!locked}
-              style={styles.amountInput}
-            />
-          </View>
-          {fieldErrors.amount ? <Text style={styles.error}>{fieldErrors.amount}</Text> : null}
+      <TextField
+        ref={noteRef}
+        label="Note"
+        optional
+        placeholder="What was this for?"
+        value={note}
+        onChangeText={setNote}
+        multiline
+        maxLength={500}
+        // No submitBehavior: a multiline field keeps RN's "newline" default, so
+        // Enter breaks the line. The sticky footer button is the submit.
+        editable={!locked}
+        testID="form-note"
+      />
+
+      <View style={styles.field}>
+        <View style={styles.labelRow}>
+          <AppText variant="subhead">Receipt</AppText>
+          <AppText variant="caption" color="textTertiary">
+            Optional
+          </AppText>
         </View>
-
-        <View style={styles.block}>
-          <Text style={styles.label}>What for?</Text>
-          <CategoryPicker
-            value={category.name}
-            icon={category.icon}
-            onChange={next => {
-              if (locked) {
-                return;
-              }
-              setCategory(next);
-              if (fieldErrors.category) {
-                setFieldErrors(prev => ({ ...prev, category: undefined }));
-              }
-            }}
-            error={fieldErrors.category}
+        {receiptError ? (
+          <ErrorBanner
+            message={receiptError.message}
+            kind={receiptError.kind}
+            onDismiss={() => setReceiptError(null)}
           />
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.label}>When?</Text>
-          <View style={styles.chipRow}>
-            <Chip
-              label="Today"
-              icon="📅"
-              selected={isToday}
-              onPress={() => {
-                if (!locked) {
-                  setDate(new Date());
-                }
-              }}
-              testID="date-today"
-            />
-            <Chip
-              label="Yesterday"
-              icon="🕘"
-              selected={isYesterday}
-              onPress={() => {
-                if (!locked) {
-                  setDate(daysAgo(new Date(), 1));
-                }
-              }}
-              testID="date-yesterday"
-            />
-            <Chip
-              label={isOtherDate ? formatDateFriendly(dateIso, today) : 'Other date'}
-              icon="🗓️"
-              selected={isOtherDate}
-              onPress={() => {
-                if (!locked) {
-                  setShowPicker(true);
-                }
-              }}
-              testID="date-other"
-            />
-          </View>
-          {showPicker ? (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display="default"
-              maximumDate={today}
-              onChange={onDateChange}
-            />
-          ) : null}
-        </View>
-
-        <TextField
-          label="Note (optional)"
-          icon="📝"
-          testID="form-note"
-          placeholder="What was this for?"
-          value={note}
-          onChangeText={setNote}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-          style={styles.noteInput}
-          editable={!locked}
-        />
-
-        <View style={styles.block}>
-          <Text style={styles.label}>Receipt (optional)</Text>
-          {hasReceipt ? (
-            <ReceiptPreview
-              path={previewPath}
-              localUri={picked?.uri ?? null}
-              onRemove={readOnly ? undefined : removeReceipt}
-            />
-          ) : readOnly ? (
-            <Text style={styles.hint}>No receipt</Text>
-          ) : (
-            <View style={styles.receiptActions}>
-              <Button
-                title="Photo"
-                testID="receipt-camera"
-                icon="📷"
-                variant="secondary"
-                onPress={() => pick('camera')}
-                disabled={saving}
-                style={styles.receiptButton}
-              />
-              <Button
-                title="Gallery"
-                testID="receipt-gallery"
-                icon="🖼️"
-                variant="secondary"
-                onPress={() => pick('gallery')}
-                disabled={saving}
-                style={styles.receiptButton}
-              />
-            </View>
-          )}
-        </View>
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-        {readOnly ? (
-          <Button
-            title="Back"
-            icon="↩️"
-            size="lg"
-            variant="secondary"
-            onPress={() => navigation.goBack()}
-          />
+        ) : null}
+        {readOnly && !picked && !previewPath ? (
+          <AppText variant="callout" color="textSecondary">
+            No receipt attached.
+          </AppText>
         ) : (
-          <Button
-            title={isEdit ? 'Save changes' : 'Save'}
-            icon="✅"
-            size="lg"
-            testID="form-submit"
-            onPress={submit}
-            loading={saving}
-            disabled={saving}
+          <ReceiptPreview
+            path={previewPath}
+            localUri={picked?.uri ?? null}
+            onTakePhoto={() => pick('camera')}
+            onChooseFromGallery={() => pick('gallery')}
+            onRemove={readOnly ? undefined : removeReceipt}
+            disabled={locked}
+            size="compact"
           />
         )}
       </View>
-    </KeyboardAvoidingView>
+
+      <CategoryPicker
+        orgId={org.id}
+        value={category.name}
+        icon={category.icon}
+        onChange={onCategoryChange}
+        error={errors.category}
+        disabled={locked}
+      />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  centered: { flex: 1, padding: spacing.lg, justifyContent: 'center', gap: spacing.md },
-  block: { marginBottom: spacing.lg },
-  label: { ...typography.label, marginBottom: spacing.sm },
-  hint: { ...typography.caption },
-  error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
-  amountRow: {
+  field: { gap: spacing.sm },
+  labelRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     gap: spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-    paddingBottom: spacing.xs,
   },
-  amountRowError: { borderBottomColor: colors.danger },
-  currency: { ...typography.heading, color: colors.textMuted },
-  amountInput: {
-    flex: 1,
-    minHeight: 64,
-    paddingVertical: 0,
-    fontSize: 40,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  noteInput: { minHeight: 88, paddingTop: spacing.md },
-  receiptActions: { flexDirection: 'row', gap: spacing.sm },
-  receiptButton: { flex: 1 },
-  footer: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
+  dateValue: { flexShrink: 1, textAlign: 'right' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });

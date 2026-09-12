@@ -1,64 +1,88 @@
 /**
- * Whether this device has shown the first-run walkthrough. Kept per device
- * (not per account) — the point is to teach the person holding the phone.
+ * First-run walkthrough. Shown once per user (on this device) when they first
+ * reach the main tabs, and replayable from Settings.
+ *
+ * The flag lives in AsyncStorage under `mps:walkthrough:v2:<userId>`. Marking
+ * it also updates an in-memory set and notifies subscribers, so the navigator
+ * stops treating the user as new right away, and a failed write still counts
+ * for the rest of the session.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { IconName } from '../ui/Icon';
 
-const KEY = 'kharcha:walkthrough:v1';
+const KEY_PREFIX = 'mps:walkthrough:v2:';
+const SEEN = 'done';
 
-export async function hasSeenWalkthrough(): Promise<boolean> {
+export function walkthroughStorageKey(userId: string): string {
+  return `${KEY_PREFIX}${userId}`;
+}
+
+type Listener = (userId: string) => void;
+
+const seenThisSession = new Set<string>();
+const listeners = new Set<Listener>();
+
+export async function hasSeenWalkthrough(userId: string): Promise<boolean> {
+  if (seenThisSession.has(userId)) {
+    return true;
+  }
   try {
-    return (await AsyncStorage.getItem(KEY)) === 'done';
+    return (await AsyncStorage.getItem(walkthroughStorageKey(userId))) === SEEN;
   } catch {
     return false;
   }
 }
 
-export async function markWalkthroughSeen(): Promise<void> {
+export async function markWalkthroughSeen(userId: string): Promise<void> {
+  if (!seenThisSession.has(userId)) {
+    seenThisSession.add(userId);
+    listeners.forEach(listener => listener(userId));
+  }
   try {
-    await AsyncStorage.setItem(KEY, 'done');
+    await AsyncStorage.setItem(walkthroughStorageKey(userId), SEEN);
   } catch {
-    // Non-fatal: worst case the walkthrough shows again next launch.
+    // Non-fatal: worst case the walkthrough shows again after a restart.
   }
 }
 
+/** Called with the user id whenever a user finishes (or skips) the walkthrough. */
+export function subscribeWalkthroughSeen(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export interface WalkthroughSlide {
-  emoji: string;
+  key: string;
+  icon: IconName;
   title: string;
   text: string;
-  /** Soft background behind the emoji. */
-  bg: string;
 }
 
 export const WALKTHROUGH_SLIDES: readonly WalkthroughSlide[] = [
   {
-    emoji: '💰',
-    title: 'Welcome to MPS Expense Tracker',
-    text: 'Write down what you spend.\nSee where your money goes.',
-    bg: '#E1F3EA',
+    key: 'record',
+    icon: 'receipt',
+    title: 'Record expenses',
+    text: 'Enter the amount, pick the expense type and save. It takes a few seconds.',
   },
   {
-    emoji: '➕',
-    title: 'Add an expense',
-    text: 'Tap the big  ＋ Add  button.\nType the amount, then tap what it was for.',
-    bg: '#DDEBFF',
+    key: 'receipt',
+    icon: 'camera',
+    title: 'Keep the receipt',
+    text: 'Take a photo of the bill or choose one from your gallery. It stays with the expense.',
   },
   {
-    emoji: '📷',
-    title: 'Keep the bill',
-    text: 'Take a photo of the receipt.\nIt stays safe with the expense.',
-    bg: '#FFF3C4',
+    key: 'share',
+    icon: 'users',
+    title: 'Share with your team',
+    text: 'Share an expense with people in your organization. They can view it but not change it.',
   },
   {
-    emoji: '👥',
-    title: 'Share with a colleague',
-    text: 'Share an expense with a colleague.\nThey can see it, not change it.',
-    bg: '#F3E3FF',
-  },
-  {
-    emoji: '⚙️',
-    title: 'Settings',
-    text: 'Expense types and staff are managed\nin Settings by your admin.',
-    bg: '#ECEEF1',
+    key: 'reports',
+    icon: 'chart-column',
+    title: 'See where money goes',
+    text: 'Reports show totals by expense type, by person and over time.',
   },
 ];

@@ -1,187 +1,342 @@
+/**
+ * One expense: amount, type, date, who added it, note, receipt and edit
+ * history. Edit is for the owner; delete for the owner or an admin. The
+ * buttons only mirror RLS on `kharcha` and the `receipts` bucket.
+ */
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, PanResponder, StyleSheet, View } from 'react-native';
 import { deleteKharcha, getKharcha } from '../api/kharcha';
-import { getProfilesByIds } from '../api/profiles';
-import { listSharesForKharcha, unshareKharcha } from '../api/shares';
+import { listKharchaHistory } from '../api/kharchaHistory';
+import { getMyKharchaView, listKharchaViewers, markRead, markViewed } from '../api/kharchaViews';
+import { formatLongDate, formatSavedAt, personName } from '../components/expenses/expenseListModel';
 import { ReceiptPreview } from '../components/ReceiptPreview';
-import { ShareModal } from '../components/ShareModal';
+import { useAuth } from '../context/AuthProvider';
+import { useOrg } from '../context/OrgProvider';
+import { AppError } from '../lib/errors';
+import { readKharchaCache } from '../lib/offlineCache';
+import { deleteReceipt } from '../lib/receipts';
+import type { RootStackParamList } from '../navigation/types';
 import {
-  Badge,
+  AppText,
+  Avatar,
+  Banner,
   Button,
   Card,
+  CategoryTile,
+  Divider,
   EmptyState,
   ErrorBanner,
-  IconCircle,
-  InfoBanner,
+  ListGroup,
+  ListItem,
+  LIST_TEXT_INSET,
   LoadingView,
-} from '../components/ui';
-import { useAuth } from '../context/AuthProvider';
-import { AppError } from '../lib/errors';
-import { deleteReceipt } from '../lib/receipts';
-import type { RootStackScreenProps } from '../navigation/types';
-import {
-  colors,
-  formatAmount,
-  formatDateFriendly,
-  radius,
-  spacing,
-  touch,
-  typography,
-} from '../theme';
-import { getCategoryMeta } from '../theme/categories';
-import type { Kharcha, KharchaShareWithProfile, Profile } from '../types/models';
+  Money,
+  Screen,
+  SectionHeader,
+} from '../ui';
+import { CURRENCY, formatAmount, spacing } from '../theme';
+import type {
+  KharchaHistoryEntry,
+  KharchaView,
+  KharchaWithOwner,
+  Organization,
+} from '../types/models';
+import { refreshWidget } from '../widgets/widgetTaskHandler';
 
-type Props = RootStackScreenProps<'ExpenseDetail'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseDetail'>;
 
-function displayName(profile: Profile | null | undefined): string {
-  return profile?.display_name ?? profile?.email ?? 'someone';
-}
+/** How far a horizontal drag must go, and how much it must dominate vertical
+ * movement, before it counts as a swipe to the next/previous expense rather
+ * than a scroll or a button tap. */
+const SWIPE_CLAIM_DX = 24;
+const SWIPE_COMMIT_DX = 60;
+const SWIPE_DIRECTION_RATIO = 1.5;
 
-/**
- * Read view for one expense. The owner-only action row (Edit / Share /
- * Delete) is purely cosmetic: RLS on `kharcha`, `kharcha_shares` and the
- * `receipts` bucket rejects those calls from anyone but the owner.
- */
 export default function ExpenseDetailScreen({ navigation, route }: Props) {
   const { kharchaId } = route.params;
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
+  const { activeOrg, isAdmin } = useOrg();
 
-  const [kharcha, setKharcha] = useState<Kharcha | null>(null);
-  const [owner, setOwner] = useState<Profile | null>(null);
-  const [shares, setShares] = useState<KharchaShareWithProfile[]>([]);
+  if (!user || !activeOrg) {
+    return <LoadingView />;
+  }
+  return (
+    <ExpenseDetail
+      key={kharchaId}
+      navigation={navigation}
+      kharchaId={kharchaId}
+      userId={user.id}
+      org={activeOrg}
+      isAdmin={isAdmin}
+    />
+  );
+}
+
+interface DetailProps {
+  navigation: Props['navigation'];
+  kharchaId: string;
+  userId: string;
+  org: Organization;
+  isAdmin: boolean;
+}
+
+function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailProps) {
+  const currency = org.currency || CURRENCY;
+  const [kharcha, setKharcha] = useState<KharchaWithOwner | null>(null);
+  const [history, setHistory] = useState<KharchaHistoryEntry[]>([]);
+  const [myView, setMyView] = useState<KharchaView | null>(null);
+  const [viewers, setViewers] = useState<KharchaView[]>([]);
+  const [markingRead, setMarkingRead] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AppError | null>(null);
   const [actionError, setActionError] = useState<AppError | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [removingShareId, setRemovingShareId] = useState<string | null>(null);
-  const [shareVisible, setShareVisible] = useState(false);
+  /** Snapshot timestamp while this row is the cached one (offline). */
+  const [offlineAt, setOfflineAt] = useState<string | null>(null);
   const requestSeq = useRef(0);
+  const mountedRef = useRef(true);
 
-  const isOwner = kharcha !== null && user !== null && kharcha.owner_id === user.id;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     const seq = ++requestSeq.current;
+    const isCurrent = () => mountedRef.current && seq === requestSeq.current;
     setError(null);
     try {
       const row = await getKharcha(kharchaId);
-      if (seq !== requestSeq.current) {
+      if (!isCurrent()) {
         return;
       }
       setKharcha(row);
-      const mine = user !== null && row.owner_id === user.id;
-      if (mine) {
-        const list = await listSharesForKharcha(kharchaId);
-        if (seq === requestSeq.current) {
-          setShares(list);
-        }
-      } else {
-        const [profile] = await getProfilesByIds([row.owner_id]);
-        if (seq === requestSeq.current) {
-          setOwner(profile ?? null);
+      setOfflineAt(null);
+      markViewed(kharchaId).catch(() => undefined);
+      const list = await listKharchaHistory(kharchaId).catch(() => null);
+      if (isCurrent() && list) {
+        setHistory(list);
+      }
+      const mine = await getMyKharchaView(kharchaId).catch(() => null);
+      if (isCurrent() && mine) {
+        setMyView(mine);
+      }
+      if (row.owner_id === userId || isAdmin) {
+        const all = await listKharchaViewers(kharchaId).catch(() => null);
+        if (isCurrent() && all) {
+          setViewers(all);
         }
       }
     } catch (err) {
-      if (seq === requestSeq.current) {
-        setError(AppError.from(err));
+      const appError = AppError.from(err);
+      // The list paints cached rows offline, so a tap must not dead-end here.
+      // The snapshot carries the whole row; only the history is lost.
+      let recovered = false;
+      if (appError.kind === 'network') {
+        const cached = await readKharchaCache(userId, org.id).catch(() => null);
+        const row = cached?.items.find(item => item.id === kharchaId);
+        if (isCurrent() && row) {
+          setKharcha(row);
+          setHistory([]);
+          setOfflineAt(cached?.cachedAt ?? null);
+          recovered = true;
+        }
+      }
+      if (isCurrent() && !recovered) {
+        setError(appError);
       }
     } finally {
-      if (seq === requestSeq.current) {
+      if (isCurrent()) {
         setLoading(false);
       }
     }
-  }, [kharchaId, user]);
+  }, [kharchaId, userId, org.id, isAdmin]);
 
-  // Fires on mount and every time the screen regains focus (e.g. after Edit).
+  // Runs on mount and whenever the screen regains focus (e.g. after Edit).
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
 
-  const confirmDelete = useCallback(() => {
+  // Same order the Expenses tab shows (see sortKharcha): lets a swipe move
+  // between neighbors without fetching or holding a live list here.
+  const [siblingIds, setSiblingIds] = useState<string[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    readKharchaCache(userId, org.id).then(cache => {
+      if (!cancelled && cache) {
+        setSiblingIds(cache.items.map(item => item.id));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, org.id]);
+
+  const siblingIndex = siblingIds?.indexOf(kharchaId) ?? -1;
+  const nextId = siblingIndex >= 0 ? siblingIds?.[siblingIndex + 1] ?? null : null;
+  const prevId = siblingIndex > 0 ? siblingIds?.[siblingIndex - 1] ?? null : null;
+  // Read by the pan responder below; kept current every render so its
+  // (created-once) release handler never acts on a stale neighbor.
+  const nextIdRef = useRef<string | null>(null);
+  const prevIdRef = useRef<string | null>(null);
+  nextIdRef.current = nextId;
+  prevIdRef.current = prevId;
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_evt, gesture) =>
+          Math.abs(gesture.dx) > SWIPE_CLAIM_DX &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * SWIPE_DIRECTION_RATIO,
+        onPanResponderRelease: (_evt, gesture) => {
+          if (gesture.dx <= -SWIPE_COMMIT_DX && nextIdRef.current) {
+            navigation.setParams({ kharchaId: nextIdRef.current });
+          } else if (gesture.dx >= SWIPE_COMMIT_DX && prevIdRef.current) {
+            navigation.setParams({ kharchaId: prevIdRef.current });
+          }
+        },
+      }),
+    [navigation],
+  );
+
+  const isOwner = kharcha !== null && kharcha.owner_id === userId;
+  const canDelete = isOwner || isAdmin;
+
+  const doDelete = useCallback(async () => {
     if (!kharcha) {
       return;
     }
-    Alert.alert('Delete expense?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Yes, delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          setActionError(null);
-          try {
-            if (kharcha.receipt_path) {
-              // Best effort: the row delete is what matters.
-              await deleteReceipt(kharcha.receipt_path).catch(() => undefined);
-            }
-            await deleteKharcha(kharcha.id);
-            navigation.goBack();
-          } catch (err) {
-            setActionError(AppError.from(err));
-            setDeleting(false);
-          }
-        },
-      },
-    ]);
-  }, [kharcha, navigation]);
-
-  const removeShare = useCallback(async (share: KharchaShareWithProfile) => {
-    setRemovingShareId(share.shared_with);
+    setDeleting(true);
     setActionError(null);
     try {
-      await unshareKharcha(share.kharcha_id, share.shared_with);
-      setShares(prev => prev.filter(s => s.shared_with !== share.shared_with));
+      if (kharcha.receipt_path && isOwner) {
+        // Storage lets only the owner remove it, and only while the row exists.
+        await deleteReceipt(kharcha.receipt_path).catch(() => undefined);
+      }
+      await deleteKharcha(kharcha.id);
+      refreshWidget().catch(() => undefined);
+      navigation.goBack();
     } catch (err) {
-      setActionError(AppError.from(err));
-    } finally {
-      setRemovingShareId(null);
+      if (mountedRef.current) {
+        setActionError(AppError.from(err));
+        setDeleting(false);
+      }
     }
-  }, []);
+  }, [kharcha, isOwner, navigation]);
 
-  if (loading) {
-    return <LoadingView message="Loading expense…" />;
-  }
+  const onMarkRead = useCallback(async () => {
+    if (markingRead || myView?.read_at) {
+      return;
+    }
+    setMarkingRead(true);
+    try {
+      const updated = await markRead(kharchaId).then(() => getMyKharchaView(kharchaId));
+      if (mountedRef.current && updated) {
+        setMyView(updated);
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        setActionError(AppError.from(err));
+      }
+    } finally {
+      if (mountedRef.current) {
+        setMarkingRead(false);
+      }
+    }
+  }, [kharchaId, markingRead, myView]);
 
-  if (error && (error.kind === 'not_found' || error.kind === 'permission')) {
-    return (
-      <EmptyState
-        emoji="🔍"
-        title="This expense isn't available"
-        message="It may have been deleted or is no longer shared with you."
-        action={<Button title="Back" icon="↩️" size="lg" onPress={() => navigation.goBack()} />}
-      />
-    );
+  const confirmDelete = useCallback(() => {
+    Alert.alert('Delete expense?', 'This removes the expense and its receipt for everyone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Yes, delete', style: 'destructive', onPress: () => doDelete() },
+    ]);
+  }, [doDelete]);
+
+  if (loading && !kharcha) {
+    return <LoadingView message="Loading expense" />;
   }
 
   if (!kharcha) {
+    const gone = error?.kind === 'not_found' || error?.kind === 'permission';
     return (
-      <View style={styles.centered}>
-        <ErrorBanner
-          message={error?.message ?? 'Could not load this expense.'}
-          kind={error?.kind}
-          onRetry={load}
-        />
-        <Button
-          title="Back"
-          icon="↩️"
-          size="lg"
-          variant="secondary"
-          onPress={() => navigation.goBack()}
-        />
-      </View>
+      <Screen
+        footer={
+          <Button title="Back" variant="secondary" onPress={() => navigation.goBack()} fullWidth />
+        }
+      >
+        {gone ? (
+          <EmptyState
+            icon="receipt"
+            title="This expense is not available"
+            message="It may have been deleted, or it is no longer shared with you."
+            fill
+          />
+        ) : (
+          <ErrorBanner
+            message={error?.message ?? 'Could not load this expense.'}
+            kind={error?.kind}
+            onRetry={load}
+          />
+        )}
+      </Screen>
     );
   }
 
-  const meta = getCategoryMeta(kharcha.category, kharcha.category_icon);
+  const ownerLabel = isOwner ? 'you' : personName(kharcha.owner);
+
+  const footer =
+    isOwner || canDelete ? (
+      <View style={styles.actions}>
+        {isOwner ? (
+          <Button
+            title="Edit"
+            icon="pencil"
+            variant="secondary"
+            onPress={() => navigation.navigate('ExpenseForm', { kharchaId: kharcha.id })}
+            disabled={deleting}
+            style={styles.action}
+            testID="detail-edit"
+          />
+        ) : null}
+        {canDelete ? (
+          <Button
+            title="Delete"
+            icon="trash"
+            variant="danger"
+            onPress={confirmDelete}
+            loading={deleting}
+            style={styles.action}
+            testID="detail-delete"
+          />
+        ) : null}
+      </View>
+    ) : undefined;
+
+  const offline = offlineAt !== null;
+  const savedAt = formatSavedAt(offlineAt);
 
   return (
-    <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {error ? <ErrorBanner message={error.message} kind={error.kind} onRetry={load} /> : null}
+    <View style={styles.swipeArea} {...panResponder.panHandlers}>
+      <Screen scroll gap={spacing.xxl} footer={footer}>
+        {offline ? (
+          <Banner
+            tone="neutral"
+            icon="wifi-off"
+            message={
+              savedAt
+                ? `You're offline. Showing this expense as saved ${savedAt}.`
+                : "You're offline. Showing this expense as saved."
+            }
+            action={{ label: 'Try again', onPress: load }}
+            testID="detail-offline"
+          />
+        ) : null}
         {actionError ? (
           <ErrorBanner
             message={actionError.message}
@@ -189,185 +344,134 @@ export default function ExpenseDetailScreen({ navigation, route }: Props) {
             onDismiss={() => setActionError(null)}
           />
         ) : null}
+        {error ? <ErrorBanner message={error.message} kind={error.kind} onRetry={load} /> : null}
 
-        <Card style={styles.summary}>
-          <IconCircle emoji={meta.emoji} bg={meta.bg} size={64} />
-          <View style={styles.summaryText}>
-            <Text
-              style={styles.amount}
-              testID="detail-amount"
-              adjustsFontSizeToFit
-              numberOfLines={1}
-            >
-              {formatAmount(kharcha.amount)}
-            </Text>
-            <Text style={styles.category} numberOfLines={1}>
-              {kharcha.category}
-            </Text>
-            <Text style={styles.date}>{formatDateFriendly(kharcha.expense_date)}</Text>
-            {kharcha.visibility === 'shared' ? (
-              <View style={styles.badgeRow}>
-                <Badge label="Shared" icon="👥" tone="shared" />
-              </View>
-            ) : null}
+        <Card style={styles.card}>
+          <View style={styles.titleRow}>
+            <CategoryTile name={kharcha.category} icon={kharcha.category_icon} size="lg" />
+            <View style={styles.titleText}>
+              <AppText variant="headline" numberOfLines={2}>
+                {kharcha.category}
+              </AppText>
+              <AppText variant="callout" color="textSecondary">
+                {formatLongDate(kharcha.expense_date)}
+              </AppText>
+            </View>
           </View>
-        </Card>
 
-        {kharcha.note ? (
-          <Card style={styles.noteCard}>
-            <Text style={styles.noteIcon}>📝</Text>
-            <Text style={styles.note} testID="detail-note">
-              {kharcha.note}
-            </Text>
-          </Card>
-        ) : null}
+          <Money
+            amount={kharcha.amount}
+            currency={currency}
+            variant="amountLarge"
+            exact
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            testID="detail-amount"
+          />
+
+          <Divider />
+
+          <View style={styles.addedBy}>
+            <Avatar
+              size="sm"
+              name={kharcha.owner?.display_name}
+              email={kharcha.owner?.email}
+              uri={kharcha.owner?.avatar_url}
+            />
+            <AppText variant="callout" color="textSecondary" style={styles.addedByText}>
+              Added by {ownerLabel}
+            </AppText>
+          </View>
+
+          {kharcha.note ? (
+            <View style={styles.note}>
+              <AppText variant="caption" color="textSecondary">
+                Note
+              </AppText>
+              <AppText variant="body" testID="detail-note">
+                {kharcha.note}
+              </AppText>
+            </View>
+          ) : null}
+        </Card>
 
         {kharcha.receipt_path ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🧾 Receipt</Text>
+            <SectionHeader title="Receipt" />
             <ReceiptPreview path={kharcha.receipt_path} />
           </View>
         ) : null}
 
+        {history.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader title="History" />
+            <ListGroup separatorInset={LIST_TEXT_INSET}>
+              {history.map(entry => (
+                <ListItem
+                  key={entry.id}
+                  title={`${formatAmount(entry.amount, currency)} · ${entry.category}`}
+                  subtitle={`Changed by ${personName(entry.editor)} · ${
+                    formatSavedAt(entry.edited_at) ?? ''
+                  }`}
+                  leading={
+                    <CategoryTile name={entry.category} icon={entry.category_icon} size="sm" />
+                  }
+                />
+              ))}
+            </ListGroup>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>👥 Sharing</Text>
-          {isOwner ? (
-            <Card style={styles.shareCard}>
-              <Text style={styles.body}>
-                {shares.length === 0
-                  ? 'Not shared yet'
-                  : `👥 Shared with ${shares.length} ${shares.length === 1 ? 'person' : 'people'}`}
-              </Text>
-              {shares.map(share => {
-                const busy = removingShareId === share.shared_with;
-                return (
-                  <View key={share.shared_with} style={styles.shareRow}>
-                    <View style={styles.shareText}>
-                      <Text style={styles.bodyStrong} numberOfLines={1}>
-                        {displayName(share.profile)}
-                      </Text>
-                      {share.profile.display_name ? (
-                        <Text style={styles.caption} numberOfLines={1}>
-                          {share.profile.email}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${displayName(share.profile)}`}
-                      accessibilityState={{ disabled: removingShareId !== null, busy }}
-                      disabled={removingShareId !== null}
-                      onPress={() => removeShare(share)}
-                      style={({ pressed }) => [
-                        styles.removeButton,
-                        (pressed || removingShareId !== null) && styles.removeButtonDim,
-                      ]}
-                    >
-                      <Text style={styles.removeText}>{busy ? '…' : '🗑️ Remove'}</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </Card>
-          ) : (
-            <InfoBanner icon="👥" message={`Shared with you by ${displayName(owner)}`} />
-          )}
-        </View>
-      </ScrollView>
-
-      {isOwner ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+          <SectionHeader title="Viewed" />
           <Button
-            title="Edit"
-            icon="✏️"
+            title={myView?.read_at ? 'Read' : 'Mark as read'}
+            icon={myView?.read_at ? 'check' : 'circle-check'}
             variant="secondary"
-            onPress={() => navigation.navigate('ExpenseForm', { kharchaId: kharcha.id })}
-            disabled={deleting}
-            style={styles.footerButton}
+            onPress={onMarkRead}
+            loading={markingRead}
+            disabled={Boolean(myView?.read_at)}
+            style={styles.markReadButton}
+            testID="detail-mark-read"
           />
-          <Button
-            title="Share"
-            icon="👥"
-            variant="secondary"
-            onPress={() => setShareVisible(true)}
-            disabled={deleting}
-            style={styles.footerButton}
-          />
-          <Button
-            title="Delete"
-            icon="🗑️"
-            variant="danger"
-            onPress={confirmDelete}
-            loading={deleting}
-            style={styles.footerButton}
-          />
+          {(isOwner || isAdmin) && viewers.length > 0 ? (
+            <ListGroup separatorInset={LIST_TEXT_INSET}>
+              {viewers.map(view => (
+                <ListItem
+                  key={view.id}
+                  title={personName(view.person)}
+                  subtitle={
+                    view.read_at
+                      ? `Read · ${formatSavedAt(view.read_at) ?? ''}`
+                      : `Viewed · ${formatSavedAt(view.viewed_at) ?? ''}`
+                  }
+                  leading={
+                    <Avatar
+                      name={view.person?.display_name}
+                      email={view.person?.email}
+                      uri={view.person?.avatar_url}
+                    />
+                  }
+                />
+              ))}
+            </ListGroup>
+          ) : null}
         </View>
-      ) : null}
-
-      {isOwner ? (
-        <ShareModal
-          visible={shareVisible}
-          kharchaId={kharcha.id}
-          existingRecipientIds={shares.map(s => s.shared_with)}
-          onClose={() => setShareVisible(false)}
-          onShared={() => {
-            load();
-          }}
-        />
-      ) : null}
+      </Screen>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
-  centered: { flex: 1, padding: spacing.lg, justifyContent: 'center', gap: spacing.md },
-  summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
-  summaryText: { flex: 1, gap: spacing.xs },
-  amount: { ...typography.display },
-  category: { ...typography.bodyStrong },
-  date: { ...typography.caption },
-  badgeRow: { flexDirection: 'row', marginTop: spacing.xs },
-  noteCard: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-  noteIcon: { fontSize: 24 },
-  note: { ...typography.body, flex: 1 },
+  swipeArea: { flex: 1 },
+  card: { gap: spacing.lg },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  titleText: { flex: 1, gap: spacing.xxs },
+  addedBy: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  addedByText: { flex: 1 },
+  note: { gap: spacing.xs },
   section: { gap: spacing.sm },
-  sectionTitle: { ...typography.label },
-  shareCard: { gap: spacing.sm },
-  body: { ...typography.body },
-  bodyStrong: { ...typography.bodyStrong },
-  caption: { ...typography.caption },
-  shareRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    minHeight: touch.min,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
-  },
-  shareText: { flex: 1 },
-  removeButton: {
-    minHeight: touch.min,
-    minWidth: touch.min,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.dangerSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeButtonDim: { opacity: 0.6 },
-  removeText: { ...typography.button, color: colors.danger, fontSize: 16 },
-  footer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  footerButton: { flex: 1, minHeight: touch.min, paddingHorizontal: spacing.sm },
+  markReadButton: { alignSelf: 'flex-start' },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  action: { flex: 1 },
 });

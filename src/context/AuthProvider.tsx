@@ -19,7 +19,7 @@ import {
   signUpWithPassword as signUpWithPasswordImpl,
 } from '../lib/auth';
 import { AppError } from '../lib/errors';
-import { clearKharchaCache } from '../lib/offlineCache';
+import { clearUserCaches } from '../lib/offlineCache';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../types/models';
 
@@ -184,9 +184,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   const signOut = useCallback(async () => {
     const leavingUserId = userId;
     await signOutImpl();
-    // The offline snapshot must not outlive the session on a shared device.
+    // Offline snapshots (expenses, memberships, expense types) must not
+    // outlive the session on a shared device.
     if (leavingUserId) {
-      await clearKharchaCache(leavingUserId);
+      await clearUserCaches(leavingUserId);
     }
     if (mounted.current) {
       setSession(null);

@@ -1,29 +1,54 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Linking, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, StyleSheet, View } from 'react-native';
 import { useSignedUrl } from '../hooks/useSignedUrl';
 import { AppError } from '../lib/errors';
 import { isPdfPath } from '../lib/receipts';
-import { colors, radius, spacing, typography } from '../theme';
-import { Button, Card, ErrorBanner, IconCircle } from './ui';
+import {
+  AppText,
+  Button,
+  Card,
+  ErrorBanner,
+  IconTile,
+  ListGroup,
+  ListItem,
+  LIST_TEXT_INSET,
+} from '../ui';
+import { colors, radius, spacing } from '../theme';
 
-interface ReceiptPreviewProps {
+export interface ReceiptPreviewProps {
   /** Storage key of an uploaded receipt (`{kharcha_id}/{filename}`). */
   path: string | null;
   /** A just-picked local file, shown instead of `path` until it is uploaded. */
   localUri?: string | null;
-  onRemove?(): void;
+  /** With both pickers set, an empty receipt offers "Take photo" / "Choose from gallery". */
+  onTakePhoto?: () => void;
+  onChooseFromGallery?: () => void;
+  onRemove?: () => void;
+  disabled?: boolean;
+  /** 'compact' (4:3, forms) or 'full' (3:4, detail). Default 'full'. */
+  size?: 'compact' | 'full';
 }
 
 /**
- * Shows a receipt. Remote receipts are loaded through a signed URL minted at
- * render time (see useSignedUrl) — the URL is never stored.
+ * Shows a receipt, or the ways to add one. Remote receipts load through a
+ * signed URL minted at render time (useSignedUrl); the URL is never stored.
  */
-export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps) {
-  // Skip minting entirely while a local file is being previewed.
+export function ReceiptPreview({
+  path,
+  localUri = null,
+  onTakePhoto,
+  onChooseFromGallery,
+  onRemove,
+  disabled = false,
+  size = 'full',
+}: ReceiptPreviewProps) {
+  // Skip minting while a local file is previewed.
   const remotePath = localUri ? null : path;
   const { url, loading, error, refresh } = useSignedUrl(remotePath);
   const [imageError, setImageError] = useState<AppError | null>(null);
-  const [imageLoading, setImageLoading] = useState(false);
+  // Starts true so `receipt-preview-loaded` is only ever reached through
+  // onLoadEnd — the first frame of the image branch has fetched nothing yet.
+  const [imageLoading, setImageLoading] = useState(true);
   const [openError, setOpenError] = useState<AppError | null>(null);
 
   const openPdf = useCallback(async () => {
@@ -40,44 +65,69 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
 
   const retry = useCallback(() => {
     setImageError(null);
+    setImageLoading(true);
     refresh();
   }, [refresh]);
 
+  const frameStyle = [styles.frame, size === 'compact' ? styles.frameCompact : styles.frameFull];
+
   if (!localUri && !path) {
-    return null;
+    if (!onTakePhoto || !onChooseFromGallery) {
+      return null;
+    }
+    return (
+      <ListGroup separatorInset={LIST_TEXT_INSET}>
+        <ListItem
+          title="Take photo"
+          leadingIcon="camera"
+          onPress={onTakePhoto}
+          disabled={disabled}
+          chevron={false}
+          testID="receipt-camera"
+        />
+        <ListItem
+          title="Choose from gallery"
+          leadingIcon="image"
+          onPress={onChooseFromGallery}
+          disabled={disabled}
+          chevron={false}
+          testID="receipt-gallery"
+        />
+      </ListGroup>
+    );
   }
 
   let content: React.ReactNode;
   if (localUri) {
     content = (
-      <View style={styles.frame} testID="receipt-preview-local">
-        <Image source={{ uri: localUri }} style={styles.image} resizeMode="contain" />
+      <View style={frameStyle} testID="receipt-preview-local">
+        <Image
+          source={{ uri: localUri }}
+          style={styles.image}
+          resizeMode="contain"
+          accessibilityLabel="Selected receipt"
+        />
       </View>
     );
   } else if (error) {
     content = <ErrorBanner message={error.message} kind={error.kind} onRetry={retry} />;
   } else if (loading || !url) {
     content = (
-      <View style={[styles.frame, styles.center]}>
+      <View style={[frameStyle, styles.center]} testID="receipt-preview-loading">
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   } else if (path && isPdfPath(path)) {
     content = (
       <Card style={styles.pdfCard}>
-        <View style={styles.pdfHeader}>
-          <IconCircle emoji="📄" bg={colors.primarySoft} size={48} />
-          <Text style={styles.pdfTitle}>Receipt (PDF)</Text>
+        <IconTile icon="file-text" tone="primary" />
+        <View style={styles.pdfText}>
+          <AppText variant="bodyStrong">Receipt</AppText>
+          <AppText variant="callout" color="textSecondary">
+            PDF document
+          </AppText>
         </View>
-        <Button
-          title="Open"
-          icon="📂"
-          size="lg"
-          variant="secondary"
-          onPress={openPdf}
-          style={styles.pdfButton}
-        />
-        {openError ? <ErrorBanner message={openError.message} kind={openError.kind} /> : null}
+        <Button title="Open" variant="secondary" size="sm" onPress={openPdf} />
       </Card>
     );
   } else if (imageError) {
@@ -85,7 +135,7 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
   } else {
     content = (
       <View
-        style={styles.frame}
+        style={frameStyle}
         testID={imageLoading ? 'receipt-preview-loading' : 'receipt-preview-loaded'}
       >
         <Image
@@ -112,7 +162,19 @@ export function ReceiptPreview({ path, localUri, onRemove }: ReceiptPreviewProps
   return (
     <View style={styles.container}>
       {content}
-      {onRemove ? <Button title="Remove" icon="🗑️" variant="secondary" onPress={onRemove} /> : null}
+      {openError ? <ErrorBanner message={openError.message} kind={openError.kind} /> : null}
+      {onRemove ? (
+        <Button
+          title="Remove receipt"
+          icon="trash"
+          variant="ghost"
+          size="sm"
+          onPress={onRemove}
+          disabled={disabled}
+          style={styles.remove}
+          testID="receipt-remove"
+        />
+      ) : null}
     </View>
   );
 }
@@ -121,15 +183,17 @@ const styles = StyleSheet.create({
   container: { gap: spacing.sm },
   frame: {
     width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
+  frameFull: { aspectRatio: 3 / 4 },
+  frameCompact: { aspectRatio: 4 / 3 },
   image: { width: '100%', height: '100%' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  pdfCard: { gap: spacing.md },
-  pdfHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  pdfTitle: { ...typography.heading, flex: 1 },
-  pdfButton: { alignSelf: 'stretch' },
+  pdfCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  pdfText: { flex: 1, gap: spacing.xxs },
+  remove: { alignSelf: 'flex-start' },
 });

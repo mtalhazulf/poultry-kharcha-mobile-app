@@ -36,8 +36,7 @@ describe('AppError.from', () => {
   it('maps 23514 (check_violation) to validation and keeps the DB message', () => {
     const err = AppError.from({
       code: '23514',
-      message:
-        'new row for relation "kharcha" violates check constraint "kharcha_visibility_check"',
+      message: 'new row for relation "kharcha" violates check constraint "kharcha_amount_check"',
     });
     expect(err.kind).toBe('validation');
     expect(err.message).toContain('violates check constraint');
