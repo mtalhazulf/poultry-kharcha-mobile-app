@@ -32,6 +32,7 @@ import OrgWelcomeScreen from '../screens/OrgWelcomeScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import TeamScreen from '../screens/TeamScreen';
 import WalkthroughScreen from '../screens/WalkthroughScreen';
+import WalletScreen from '../screens/WalletScreen';
 import { colors, typography } from '../theme';
 import type { Membership } from '../types/models';
 import { LoadingView } from '../ui';
@@ -312,6 +313,7 @@ export default function RootNavigator() {
               component={PersonKhataScreen}
               options={{ title: 'Khata' }}
             />
+            <Stack.Screen name="Wallet" component={WalletScreen} options={{ title: 'Wallet' }} />
             <Stack.Screen name="CreateOrg" component={CreateOrgScreen} options={CREATE_ORG_OPTIONS} />
             <Stack.Screen name="JoinOrg" component={JoinOrgScreen} options={JOIN_ORG_OPTIONS} />
             {walkthroughSeen ? (

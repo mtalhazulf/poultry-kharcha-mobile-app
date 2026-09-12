@@ -129,6 +129,32 @@ export interface KhataEntryInput {
   entryDate: string;
 }
 
+/**
+ * One entry in a person's Wallet — a running, display-only balance funding
+ * their expenses. Positive = a top-up (admin-only); negative = an expense
+ * drew it down (written automatically by a database trigger, never by the
+ * client). `kharcha_id` links a deduction back to its expense; null for
+ * top-ups.
+ */
+export interface WalletEntry {
+  id: string;
+  org_id: string;
+  user_id: string;
+  amount: number;
+  note: string | null;
+  kharcha_id: string | null;
+  created_by: string;
+  /** YYYY-MM-DD */
+  entry_date: string;
+  created_at: string;
+}
+
+/** Fields supplied when an admin tops up someone's wallet. */
+export interface WalletTopUpInput {
+  amount: number;
+  note: string | null;
+}
+
 /** An expense type of one organization, managed by its owner/admins. */
 export interface Category {
   id: string;
@@ -268,6 +294,20 @@ export function toKhataEntry(row: Tables<'khata_entries'>): KhataEntry {
     created_at: row.created_at,
     updated_at: row.updated_at,
     person: null,
+  };
+}
+
+export function toWalletEntry(row: Tables<'wallet_entries'>): WalletEntry {
+  return {
+    id: row.id,
+    org_id: row.org_id,
+    user_id: row.user_id,
+    amount: Number(row.amount),
+    note: row.note,
+    kharcha_id: row.kharcha_id,
+    created_by: row.created_by,
+    entry_date: row.entry_date,
+    created_at: row.created_at,
   };
 }
 

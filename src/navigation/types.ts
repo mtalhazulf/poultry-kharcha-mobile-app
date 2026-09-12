@@ -37,6 +37,8 @@ export type RootStackParamList = {
   MemberDetail: { userId: string };
   /** One person's Khata (running ledger). */
   PersonKhata: { userId: string };
+  /** One person's Wallet history. Omit `userId` for your own. */
+  Wallet: { userId?: string } | undefined;
   /** First-run tour; `replay` when opened again from Settings (shown as a modal). */
   Walkthrough: { replay?: boolean } | undefined;
 };

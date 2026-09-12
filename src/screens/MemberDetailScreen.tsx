@@ -15,6 +15,7 @@ import {
   setMemberStatus,
 } from '../api/members';
 import { transferOwnership } from '../api/organizations';
+import { listWalletEntries } from '../api/wallet';
 import {
   memberDateLine,
   memberPermissions,
@@ -22,11 +23,12 @@ import {
   roleLabel,
   roleTone,
 } from '../components/team/teamLogic';
+import { sumBalance } from '../components/wallet/walletLogic';
 import { useAuth } from '../context/AuthProvider';
 import { useOrg } from '../context/OrgProvider';
 import { AppError } from '../lib/errors';
 import type { RootStackScreenProps } from '../navigation/types';
-import { colors, layout, radius, spacing } from '../theme';
+import { colors, CURRENCY, layout, radius, spacing } from '../theme';
 import type { OrgMember } from '../types/models';
 import {
   AppText,
@@ -39,6 +41,7 @@ import {
   ErrorBanner,
   ListGroup,
   ListItem,
+  Money,
   Screen,
   SectionHeader,
   Segmented,
@@ -62,6 +65,7 @@ export default function MemberDetailScreen({ navigation, route }: Props) {
   const { activeOrg, role: viewerRole, refresh: refreshOrg } = useOrg();
   const orgId = activeOrg?.id ?? null;
   const orgName = activeOrg?.name ?? 'this organization';
+  const currency = activeOrg?.currency || CURRENCY;
 
   const [member, setMember] = useState<OrgMember | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -70,6 +74,7 @@ export default function MemberDetailScreen({ navigation, route }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<Busy | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const mounted = useRef(true);
   const seq = useRef(0);
@@ -114,6 +119,28 @@ export default function MemberDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     load('initial');
   }, [load]);
+
+  useEffect(() => {
+    if (!orgId) {
+      return;
+    }
+    let active = true;
+    setWalletBalance(null);
+    listWalletEntries(orgId, userId)
+      .then(entries => {
+        if (active) {
+          setWalletBalance(sumBalance(entries));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setWalletBalance(0);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [orgId, userId]);
 
   const name = member ? personName(member.profile) : '';
 
@@ -379,6 +406,34 @@ export default function MemberDetailScreen({ navigation, route }: Props) {
         ) : null}
       </Card>
 
+      <View style={styles.section}>
+        <SectionHeader title="Wallet" />
+        <Card style={styles.cardBody}>
+          <View style={styles.walletRow}>
+            <AppText variant="callout" color="textSecondary">
+              Balance
+            </AppText>
+            {walletBalance === null ? (
+              <Skeleton width={80} height={20} />
+            ) : (
+              <Money
+                amount={walletBalance}
+                currency={currency}
+                color={walletBalance > 0 ? 'primaryText' : 'textSecondary'}
+                testID="member-wallet-balance"
+              />
+            )}
+          </View>
+          <Button
+            title="View wallet"
+            icon="banknote"
+            variant="secondary"
+            onPress={() => navigation.navigate('Wallet', { userId: member.user_id })}
+            testID="member-view-wallet"
+          />
+        </Card>
+      </View>
+
       {perms.canReview ? (
         <View style={styles.section}>
           <SectionHeader title="Join request" />
@@ -507,6 +562,7 @@ const styles = StyleSheet.create({
   },
   section: { gap: spacing.sm },
   cardBody: { gap: spacing.md },
+  walletRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   button: { flexGrow: 1, flexBasis: 120 },
   hint: { paddingHorizontal: spacing.xs, minHeight: layout.icon.sm },

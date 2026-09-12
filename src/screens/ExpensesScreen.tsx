@@ -18,10 +18,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listOrgMembers, memberDisplayName } from '../api/members';
+import { listWalletEntries } from '../api/wallet';
 import { AppHeader } from '../components/AppHeader';
 import { ExpenseListItem } from '../components/ExpenseListItem';
 import { ExpenseListSkeleton } from '../components/expenses/ExpenseListSkeleton';
 import { ExpenseSummaryCard } from '../components/expenses/ExpenseSummaryCard';
+import { WalletBalanceCard } from '../components/expenses/WalletBalanceCard';
 import {
   activeFilterCount,
   applyBaseFilters,
@@ -36,6 +38,7 @@ import {
   type ExpenseSection,
 } from '../components/expenses/expenseListModel';
 import { FilterSheet, type PersonOption } from '../components/FilterSheet';
+import { sumBalance } from '../components/wallet/walletLogic';
 import { useAuth } from '../context/AuthProvider';
 import { useOrg } from '../context/OrgProvider';
 import { useCategories } from '../hooks/useCategories';
@@ -55,7 +58,7 @@ import {
   type SegmentedOption,
 } from '../ui';
 import { colors, CURRENCY, formatAmount, layout, spacing } from '../theme';
-import type { KharchaWithOwner, OrgMember, Organization } from '../types/models';
+import type { KharchaWithOwner, OrgMember, Organization, WalletEntry } from '../types/models';
 
 const SCOPE_OPTIONS: ReadonlyArray<SegmentedOption<ExpenseScope>> = [
   { value: 'all', label: 'All', testID: 'expenses-scope-all' },
@@ -100,8 +103,10 @@ function ExpensesContent({ userId, org, isAdmin }: ContentProps) {
 
   const [members, setMembers] = useState<OrgMember[] | null>(null);
   const [membersError, setMembersError] = useState<AppError | null>(null);
+  const [walletEntries, setWalletEntries] = useState<WalletEntry[] | null>(null);
   const [shownOrgId, setShownOrgId] = useState(org.id);
   const membersSeq = useRef(0);
+  const walletSeq = useRef(0);
 
   // Switching organization starts from clean filters and search. This is a
   // state reset rather than a `key` on this component, because the header owns
@@ -115,8 +120,26 @@ function ExpensesContent({ userId, org, isAdmin }: ContentProps) {
     setQuery('');
     setMembers(null);
     setMembersError(null);
+    setWalletEntries(null);
     membersSeq.current += 1;
+    walletSeq.current += 1;
   }
+
+  const loadWallet = useCallback(async () => {
+    const seq = ++walletSeq.current;
+    try {
+      const list = await listWalletEntries(org.id, userId);
+      if (seq === walletSeq.current) {
+        setWalletEntries(list);
+      }
+    } catch {
+      // Best effort: the balance card just keeps showing its last value/loading state.
+    }
+  }, [org.id, userId]);
+
+  useEffect(() => {
+    loadWallet();
+  }, [loadWallet]);
 
   // Realtime keeps the list live; a quiet refetch on every return to the tab
   // also covers add/edit/delete round-trips and day labels after midnight.
@@ -129,7 +152,8 @@ function ExpensesContent({ userId, org, isAdmin }: ContentProps) {
       }
       setNow(new Date());
       revalidate();
-    }, [revalidate]),
+      loadWallet();
+    }, [revalidate, loadWallet]),
   );
 
   // Focus fires on navigation, never on a return to the foreground: without
@@ -191,6 +215,7 @@ function ExpensesContent({ userId, org, isAdmin }: ContentProps) {
     (kharchaId: string) => navigation.navigate('ExpenseDetail', { kharchaId }),
     [navigation],
   );
+  const openWallet = useCallback(() => navigation.navigate('Wallet', {}), [navigation]);
 
   const resetFilters = useCallback(() => {
     setFilters(DEFAULT_EXPENSE_FILTERS);
@@ -218,6 +243,8 @@ function ExpensesContent({ userId, org, isAdmin }: ContentProps) {
         })) ?? null,
     [members, userId],
   );
+
+  const walletBalance = useMemo(() => sumBalance(walletEntries ?? []), [walletEntries]);
 
   const filterCount = activeFilterCount(filters);
   const firstLoad = loading && items.length === 0;
@@ -295,6 +322,14 @@ function ExpensesContent({ userId, org, isAdmin }: ContentProps) {
         currency={currency}
         loading={firstLoad}
         testID="expenses-summary"
+      />
+
+      <WalletBalanceCard
+        balance={walletBalance}
+        currency={currency}
+        loading={walletEntries === null}
+        onPress={openWallet}
+        testID="wallet-balance"
       />
 
       <View style={styles.controls}>

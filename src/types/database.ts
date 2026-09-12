@@ -401,6 +401,71 @@ export type Database = {
         };
         Relationships: [];
       };
+      wallet_entries: {
+        Row: {
+          amount: number;
+          created_at: string;
+          created_by: string;
+          entry_date: string;
+          id: string;
+          kharcha_id: string | null;
+          note: string | null;
+          org_id: string;
+          user_id: string;
+        };
+        Insert: {
+          amount: number;
+          created_at?: string;
+          created_by: string;
+          entry_date?: string;
+          id?: string;
+          kharcha_id?: string | null;
+          note?: string | null;
+          org_id: string;
+          user_id: string;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          created_by?: string;
+          entry_date?: string;
+          id?: string;
+          kharcha_id?: string | null;
+          note?: string | null;
+          org_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'wallet_entries_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'wallet_entries_kharcha_id_fkey';
+            columns: ['kharcha_id'];
+            isOneToOne: true;
+            referencedRelation: 'kharcha';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'wallet_entries_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'wallet_entries_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
