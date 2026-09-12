@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 /** Bottom tabs rendered by the root stack's `Tabs` screen (docs/ARCHITECTURE.md §5). */
 export type MainTabParamList = {
   ExpensesTab: undefined;
+  KhataTab: undefined;
   ReportsTab: undefined;
   SettingsTab: undefined;
 };
@@ -34,6 +35,8 @@ export type RootStackParamList = {
   OrgSettings: undefined;
   Team: undefined;
   MemberDetail: { userId: string };
+  /** One person's Khata (running ledger). */
+  PersonKhata: { userId: string };
   /** First-run tour; `replay` when opened again from Settings (shown as a modal). */
   Walkthrough: { replay?: boolean } | undefined;
 };

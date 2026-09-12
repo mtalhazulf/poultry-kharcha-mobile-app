@@ -6,6 +6,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ExpensesScreen from '../screens/ExpensesScreen';
+import KhataScreen from '../screens/KhataScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { colors, layout, spacing, typography } from '../theme';
@@ -27,6 +28,10 @@ function ExpensesIcon({ color }: TabIconProps) {
   return <Icon name="receipt" size={TAB_ICON_SIZE} color={color} />;
 }
 
+function KhataIcon({ color }: TabIconProps) {
+  return <Icon name="arrow-left-right" size={TAB_ICON_SIZE} color={color} />;
+}
+
 function ReportsIcon({ color }: TabIconProps) {
   return <Icon name="chart-column" size={TAB_ICON_SIZE} color={color} />;
 }
@@ -35,7 +40,7 @@ function SettingsIcon({ color }: TabIconProps) {
   return <Icon name="settings" size={TAB_ICON_SIZE} color={color} />;
 }
 
-/** Expenses · Reports · Settings. Each tab screen renders its own AppHeader. */
+/** Expenses · Khata · Reports · Settings. Each tab screen renders its own AppHeader. */
 export default function MainTabs() {
   const insets = useSafeAreaInsets();
 
@@ -61,6 +66,11 @@ export default function MainTabs() {
         name="ExpensesTab"
         component={ExpensesScreen}
         options={{ title: 'Expenses', tabBarIcon: ExpensesIcon, tabBarButtonTestID: 'tab-expenses' }}
+      />
+      <Tab.Screen
+        name="KhataTab"
+        component={KhataScreen}
+        options={{ title: 'Khata', tabBarIcon: KhataIcon, tabBarButtonTestID: 'tab-khata' }}
       />
       <Tab.Screen
         name="ReportsTab"

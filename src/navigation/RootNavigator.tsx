@@ -26,6 +26,7 @@ import JoinOrgScreen from '../screens/JoinOrgScreen';
 import LockScreen from '../screens/LockScreen';
 import LoginScreen from '../screens/LoginScreen';
 import MemberDetailScreen from '../screens/MemberDetailScreen';
+import PersonKhataScreen from '../screens/PersonKhataScreen';
 import OrgSettingsScreen from '../screens/OrgSettingsScreen';
 import OrgWelcomeScreen from '../screens/OrgWelcomeScreen';
 import SignUpScreen from '../screens/SignUpScreen';
@@ -305,6 +306,11 @@ export default function RootNavigator() {
               name="MemberDetail"
               component={MemberDetailScreen}
               options={{ title: 'Member' }}
+            />
+            <Stack.Screen
+              name="PersonKhata"
+              component={PersonKhataScreen}
+              options={{ title: 'Khata' }}
             />
             <Stack.Screen name="CreateOrg" component={CreateOrgScreen} options={CREATE_ORG_OPTIONS} />
             <Stack.Screen name="JoinOrg" component={JoinOrgScreen} options={JOIN_ORG_OPTIONS} />

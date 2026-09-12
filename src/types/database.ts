@@ -164,6 +164,93 @@ export type Database = {
           },
         ];
       };
+      kharcha_views: {
+        Row: {
+          id: string;
+          kharcha_id: string;
+          read_at: string | null;
+          user_id: string;
+          viewed_at: string;
+        };
+        Insert: {
+          id?: string;
+          kharcha_id: string;
+          read_at?: string | null;
+          user_id: string;
+          viewed_at?: string;
+        };
+        Update: {
+          id?: string;
+          kharcha_id?: string;
+          read_at?: string | null;
+          user_id?: string;
+          viewed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kharcha_views_kharcha_id_fkey';
+            columns: ['kharcha_id'];
+            isOneToOne: false;
+            referencedRelation: 'kharcha';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kharcha_views_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      khata_entries: {
+        Row: {
+          amount: number;
+          created_at: string;
+          entry_date: string;
+          id: string;
+          note: string | null;
+          org_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          amount: number;
+          created_at?: string;
+          entry_date?: string;
+          id?: string;
+          note?: string | null;
+          org_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          entry_date?: string;
+          id?: string;
+          note?: string | null;
+          org_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'khata_entries_org_id_fkey';
+            columns: ['org_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'khata_entries_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       organization_invite_codes: {
         Row: {
           code: string;

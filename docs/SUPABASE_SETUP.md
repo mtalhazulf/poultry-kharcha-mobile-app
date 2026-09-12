@@ -18,6 +18,12 @@ applied in filename order:
    accounts, roles, and per-organization data. This is the source of truth
    for the schema described below; see `docs/ARCHITECTURE.md` for the full
    build contract.
+5. `20260912040000_expense_history_and_org_visibility.sql` — drops the
+   per-recipient sharing model (`kharcha_shares`, `visibility`) in favor of
+   plain org-wide expense visibility, and adds `kharcha_history` (a version
+   snapshot on every real edit, via the `kharcha_snapshot_history` trigger).
+6. `20260912050000_org_currency_rpc.sql` — `set_organization_currency`, an
+   admin-only RPC so an org's currency is editable after creation.
 
 Migrations are idempotent (`create ... if not exists`, `drop policy if
 exists`, `on conflict`), so they are safe to re-run.

@@ -90,6 +90,45 @@ export interface KharchaHistoryEntry {
   editor: ProfileSummary | null;
 }
 
+/** One person's viewed/read state for an expense. Viewed fires automatically
+ * on open; read is a deliberate "Mark as read". Independent states. */
+export interface KharchaView {
+  id: string;
+  kharcha_id: string;
+  user_id: string;
+  viewed_at: string;
+  read_at: string | null;
+  /** Null when the viewer's profile is not readable (e.g. they left the organization). */
+  person: ProfileSummary | null;
+}
+
+/**
+ * One +/- entry in a person's Khata (running ledger with the organization).
+ * Positive amount = they borrowed from the organization; negative = repaid.
+ * Only the person themselves adds to their own khata — no approval step.
+ */
+export interface KhataEntry {
+  id: string;
+  org_id: string;
+  user_id: string;
+  amount: number;
+  note: string | null;
+  /** YYYY-MM-DD */
+  entry_date: string;
+  created_at: string;
+  updated_at: string;
+  /** Null when the person's profile is not readable (e.g. they left the organization). */
+  person: ProfileSummary | null;
+}
+
+/** Fields supplied when adding a Khata entry (always for the signed-in user). */
+export interface KhataEntryInput {
+  amount: number;
+  note: string | null;
+  /** YYYY-MM-DD */
+  entryDate: string;
+}
+
 /** An expense type of one organization, managed by its owner/admins. */
 export interface Category {
   id: string;
@@ -202,6 +241,33 @@ export function toKharchaHistoryEntry(row: Tables<'kharcha_history'>): KharchaHi
     edited_by: row.edited_by,
     edited_at: row.edited_at,
     editor: null,
+  };
+}
+
+/** Narrow a raw `kharcha_views` row into the app model (the person relation is not copied). */
+export function toKharchaView(row: Tables<'kharcha_views'>): KharchaView {
+  return {
+    id: row.id,
+    kharcha_id: row.kharcha_id,
+    user_id: row.user_id,
+    viewed_at: row.viewed_at,
+    read_at: row.read_at,
+    person: null,
+  };
+}
+
+/** Narrow a raw `khata_entries` row into the app model (the person relation is not copied). */
+export function toKhataEntry(row: Tables<'khata_entries'>): KhataEntry {
+  return {
+    id: row.id,
+    org_id: row.org_id,
+    user_id: row.user_id,
+    amount: Number(row.amount),
+    note: row.note,
+    entry_date: row.entry_date,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    person: null,
   };
 }
 

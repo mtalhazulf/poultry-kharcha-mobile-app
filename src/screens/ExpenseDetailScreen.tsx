@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, PanResponder, StyleSheet, View } from 'react-native';
 import { deleteKharcha, getKharcha } from '../api/kharcha';
 import { listKharchaHistory } from '../api/kharchaHistory';
+import { getMyKharchaView, listKharchaViewers, markRead, markViewed } from '../api/kharchaViews';
 import { formatLongDate, formatSavedAt, personName } from '../components/expenses/expenseListModel';
 import { ReceiptPreview } from '../components/ReceiptPreview';
 import { useAuth } from '../context/AuthProvider';
@@ -36,7 +37,12 @@ import {
   SectionHeader,
 } from '../ui';
 import { CURRENCY, formatAmount, spacing } from '../theme';
-import type { KharchaHistoryEntry, KharchaWithOwner, Organization } from '../types/models';
+import type {
+  KharchaHistoryEntry,
+  KharchaView,
+  KharchaWithOwner,
+  Organization,
+} from '../types/models';
 import { refreshWidget } from '../widgets/widgetTaskHandler';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseDetail'>;
@@ -80,6 +86,9 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
   const currency = org.currency || CURRENCY;
   const [kharcha, setKharcha] = useState<KharchaWithOwner | null>(null);
   const [history, setHistory] = useState<KharchaHistoryEntry[]>([]);
+  const [myView, setMyView] = useState<KharchaView | null>(null);
+  const [viewers, setViewers] = useState<KharchaView[]>([]);
+  const [markingRead, setMarkingRead] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AppError | null>(null);
   const [actionError, setActionError] = useState<AppError | null>(null);
@@ -107,9 +116,20 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
       }
       setKharcha(row);
       setOfflineAt(null);
+      markViewed(kharchaId).catch(() => undefined);
       const list = await listKharchaHistory(kharchaId).catch(() => null);
       if (isCurrent() && list) {
         setHistory(list);
+      }
+      const mine = await getMyKharchaView(kharchaId).catch(() => null);
+      if (isCurrent() && mine) {
+        setMyView(mine);
+      }
+      if (row.owner_id === userId || isAdmin) {
+        const all = await listKharchaViewers(kharchaId).catch(() => null);
+        if (isCurrent() && all) {
+          setViewers(all);
+        }
       }
     } catch (err) {
       const appError = AppError.from(err);
@@ -134,7 +154,7 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
         setLoading(false);
       }
     }
-  }, [kharchaId, userId, org.id]);
+  }, [kharchaId, userId, org.id, isAdmin]);
 
   // Runs on mount and whenever the screen regains focus (e.g. after Edit).
   useFocusEffect(
@@ -209,6 +229,27 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
       }
     }
   }, [kharcha, isOwner, navigation]);
+
+  const onMarkRead = useCallback(async () => {
+    if (markingRead || myView?.read_at) {
+      return;
+    }
+    setMarkingRead(true);
+    try {
+      const updated = await markRead(kharchaId).then(() => getMyKharchaView(kharchaId));
+      if (mountedRef.current && updated) {
+        setMyView(updated);
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        setActionError(AppError.from(err));
+      }
+    } finally {
+      if (mountedRef.current) {
+        setMarkingRead(false);
+      }
+    }
+  }, [kharchaId, markingRead, myView]);
 
   const confirmDelete = useCallback(() => {
     Alert.alert('Delete expense?', 'This removes the expense and its receipt for everyone.', [
@@ -380,6 +421,42 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
             </ListGroup>
           </View>
         ) : null}
+
+        <View style={styles.section}>
+          <SectionHeader title="Viewed" />
+          <Button
+            title={myView?.read_at ? 'Read' : 'Mark as read'}
+            icon={myView?.read_at ? 'check' : 'circle-check'}
+            variant="secondary"
+            onPress={onMarkRead}
+            loading={markingRead}
+            disabled={Boolean(myView?.read_at)}
+            style={styles.markReadButton}
+            testID="detail-mark-read"
+          />
+          {(isOwner || isAdmin) && viewers.length > 0 ? (
+            <ListGroup separatorInset={LIST_TEXT_INSET}>
+              {viewers.map(view => (
+                <ListItem
+                  key={view.id}
+                  title={personName(view.person)}
+                  subtitle={
+                    view.read_at
+                      ? `Read · ${formatSavedAt(view.read_at) ?? ''}`
+                      : `Viewed · ${formatSavedAt(view.viewed_at) ?? ''}`
+                  }
+                  leading={
+                    <Avatar
+                      name={view.person?.display_name}
+                      email={view.person?.email}
+                      uri={view.person?.avatar_url}
+                    />
+                  }
+                />
+              ))}
+            </ListGroup>
+          ) : null}
+        </View>
       </Screen>
     </View>
   );
@@ -394,6 +471,7 @@ const styles = StyleSheet.create({
   addedByText: { flex: 1 },
   note: { gap: spacing.xs },
   section: { gap: spacing.sm },
+  markReadButton: { alignSelf: 'flex-start' },
   actions: { flexDirection: 'row', gap: spacing.sm },
   action: { flex: 1 },
 });
