@@ -53,14 +53,17 @@ function scopeFor(userId: string, orgId: string): Scope {
 // hook instance gets its own topic: `kharcha:<orgId>:<n>`.
 let channelCounter = 0;
 
-/** expense_date desc, then created_at desc — the order `listKharcha` uses. */
+/**
+ * Newest touched first — `updated_at` desc, the order `listKharcha` uses.
+ * A freshly created row's `updated_at` starts equal to `created_at` (set once
+ * at insert, then bumped by the `kharcha_set_updated_at` trigger on every
+ * edit), so an unedited expense sorts by when it was added; editing one
+ * (even a backdated `expense_date`) brings it back to the top.
+ */
 export function sortKharcha<T extends Kharcha>(items: T[]): T[] {
   return [...items].sort((a, b) => {
-    if (a.expense_date !== b.expense_date) {
-      return a.expense_date < b.expense_date ? 1 : -1;
-    }
-    if (a.created_at !== b.created_at) {
-      return a.created_at < b.created_at ? 1 : -1;
+    if (a.updated_at !== b.updated_at) {
+      return a.updated_at < b.updated_at ? 1 : -1;
     }
     return 0;
   });

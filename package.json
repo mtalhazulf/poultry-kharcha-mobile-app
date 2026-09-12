@@ -30,6 +30,7 @@
     "lucide-react-native": "1.45.0",
     "react": "19.2.3",
     "react-native": "0.87.1",
+    "react-native-android-widget": "^0.22.1",
     "react-native-config": "^1.7.2",
     "react-native-image-picker": "^8.2.1",
     "react-native-keyboard-controller": "1.22.5",

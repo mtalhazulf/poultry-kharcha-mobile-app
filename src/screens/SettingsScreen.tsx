@@ -4,7 +4,7 @@
  * calm menu. Admin-only controls are on those screens and hidden for members.
  */
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import packageJson from '../../package.json';
 import { AppHeader } from '../components/AppHeader';
@@ -27,8 +27,17 @@ import {
   ListGroup,
   ListItem,
   Screen,
+  Segmented,
   Toggle,
+  type SegmentedOption,
 } from '../ui';
+import { getWidgetView, setWidgetView, type WidgetView } from '../widgets/widgetLogic';
+import { refreshWidget } from '../widgets/widgetTaskHandler';
+
+const WIDGET_VIEW_OPTIONS: ReadonlyArray<SegmentedOption<WidgetView>> = [
+  { value: 'quickAdd', label: 'Quick add', testID: 'settings-widget-quick-add' },
+  { value: 'recent', label: 'Recent entries', testID: 'settings-widget-recent' },
+];
 
 type Props = MainTabScreenProps<'SettingsTab'>;
 
@@ -50,6 +59,19 @@ export default function SettingsScreen({ navigation }: Props) {
   const [biometricError, setBiometricError] = useState<AppError | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<AppError | null>(null);
+  const [widgetView, setWidgetViewState] = useState<WidgetView>('quickAdd');
+
+  useEffect(() => {
+    let cancelled = false;
+    getWidgetView().then(view => {
+      if (!cancelled) {
+        setWidgetViewState(view);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Expense types may have changed on their own screen.
   const focusedBefore = useRef(false);
@@ -97,6 +119,13 @@ export default function SettingsScreen({ navigation }: Props) {
     },
     [enable, disable],
   );
+
+  const onWidgetViewChange = useCallback((next: WidgetView) => {
+    setWidgetViewState(next);
+    setWidgetView(next)
+      .then(refreshWidget)
+      .catch(() => undefined);
+  }, []);
 
   const confirmSignOut = useCallback(() => {
     Alert.alert('Sign out?', 'You can sign in again any time.', [
@@ -195,6 +224,18 @@ export default function SettingsScreen({ navigation }: Props) {
           message={biometricError?.message}
           kind={biometricError?.kind}
           onDismiss={() => setBiometricError(null)}
+        />
+      </View>
+
+      <View style={styles.group}>
+        <AppText variant="subhead" color="textSecondary">
+          Home screen widget
+        </AppText>
+        <Segmented
+          options={WIDGET_VIEW_OPTIONS}
+          value={widgetView}
+          onChange={onWidgetViewChange}
+          testID="settings-widget-view"
         />
       </View>
 

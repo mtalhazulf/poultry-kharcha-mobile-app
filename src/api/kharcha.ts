@@ -31,14 +31,17 @@ function toKharchaWithOwner(
   return { ...toKharcha(row), owner: row.owner ? toProfileSummary(row.owner) : null };
 }
 
-/** Newest expense date first, then newest created. */
+/**
+ * Newest touched first. `updated_at` starts equal to `created_at` at insert,
+ * so an unedited expense sorts by when it was added, not the calendar date
+ * it's for; editing one brings it back to the top (see sortKharcha).
+ */
 export async function listKharcha(orgId: string): Promise<KharchaWithOwner[]> {
   const { data, error } = await supabase
     .from('kharcha')
     .select(COLUMNS_WITH_OWNER)
     .eq('org_id', orgId)
-    .order('expense_date', { ascending: false })
-    .order('created_at', { ascending: false });
+    .order('updated_at', { ascending: false });
   if (error) {
     throw AppError.from(error);
   }

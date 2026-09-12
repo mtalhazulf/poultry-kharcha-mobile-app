@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthProvider';
 import { useBiometricLock } from '../context/BiometricLockProvider';
 import { useOrg } from '../context/OrgProvider';
 import { AppError } from '../lib/errors';
+import { getLastCategory, setLastCategory } from '../lib/lastCategory';
 import { deleteReceipt, pickReceipt, uploadReceipt, type PickedFile } from '../lib/receipts';
 import type { RootStackParamList } from '../navigation/types';
 import {
@@ -37,6 +38,7 @@ import {
 } from '../ui';
 import { CURRENCY, formatAmount, parseIsoDate, spacing, toIsoDate } from '../theme';
 import type { KharchaInput, KharchaWithOwner, Organization } from '../types/models';
+import { refreshWidget } from '../widgets/widgetTaskHandler';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseForm'>;
 
@@ -141,6 +143,23 @@ function ExpenseForm({ navigation, kharchaId, userId, org }: FormProps) {
     load();
   }, [load]);
 
+  // New expense only: default to the type last used for this org, if the
+  // user hasn't already picked one by the time this resolves.
+  useEffect(() => {
+    if (isEdit) {
+      return;
+    }
+    let cancelled = false;
+    getLastCategory(org.id).then(last => {
+      if (!cancelled && last) {
+        setCategory(prev => (prev.name === '' ? last : prev));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, org.id]);
+
   const readOnly = isEdit && existing !== null && existing.owner_id !== userId;
   const locked = readOnly || saving;
   const todayIso = isoDaysAgo(0);
@@ -230,6 +249,8 @@ function ExpenseForm({ navigation, kharchaId, userId, org }: FormProps) {
     try {
       if (!isEdit) {
         const created = await createKharcha(org.id, input);
+        refreshWidget().catch(() => undefined);
+        setLastCategory(org.id, { name: category.name, icon: category.icon }).catch(() => undefined);
         if (picked) {
           try {
             const key = await uploadReceipt(created.id, picked);
@@ -268,6 +289,7 @@ function ExpenseForm({ navigation, kharchaId, userId, org }: FormProps) {
       const patch = buildExpensePatch(existing, { ...input, receiptPath });
       if (Object.keys(patch).length > 0) {
         await updateKharcha(kharchaId, patch);
+        refreshWidget().catch(() => undefined);
       }
       if (oldPath && receiptPath !== undefined && receiptPath !== oldPath) {
         // Best effort: an orphaned object is harmless.

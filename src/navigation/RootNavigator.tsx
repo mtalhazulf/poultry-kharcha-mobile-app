@@ -1,6 +1,7 @@
 import {
   DefaultTheme,
   NavigationContainer,
+  useNavigationContainerRef,
   type LinkingOptions,
   type RouteProp,
   type Theme,
@@ -10,11 +11,12 @@ import {
   type NativeStackNavigationOptions,
 } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthProvider';
 import { useBiometricLock } from '../context/BiometricLockProvider';
 import { useOrg } from '../context/OrgProvider';
 import { hasSeenWalkthrough, subscribeWalkthroughSeen } from '../lib/walkthrough';
+import { setPendingDeepLink, takePendingDeepLink } from '../lib/pendingDeepLink';
 import CreateOrgScreen from '../screens/CreateOrgScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import ExpenseFormScreen from '../screens/ExpenseFormScreen';
@@ -38,12 +40,18 @@ import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// Auth callbacks (kharcha://auth/callback) are consumed by AuthProvider, so no
-// screen is mapped here; the prefix is declared so React Navigation doesn't
-// treat those URLs as unknown routes.
+// Auth callbacks (kharcha://auth/callback) are consumed by AuthProvider, not
+// React Navigation, so no screen is mapped for that path. Expense links (e.g.
+// from the home-screen widget) are; see the pending-deep-link handling below
+// for why a cold start needs more than this config alone.
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['kharcha://'],
-  config: { screens: {} },
+  config: {
+    screens: {
+      ExpenseForm: 'expense/new',
+      ExpenseDetail: 'expense/:kharchaId',
+    },
+  },
 };
 
 const navigationTheme: Theme = {
@@ -176,6 +184,7 @@ export default function RootNavigator() {
   const { session, user, initializing } = useAuth();
   const { locked, ready: lockReady } = useBiometricLock();
   const { activeOrg, memberships, loading: orgLoading } = useOrg();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
 
   const userId = user?.id ?? null;
   const orgStarted = useOrgStarted(userId, orgLoading, memberships);
@@ -193,12 +202,46 @@ export default function RootNavigator() {
     walkthroughSeen,
   });
 
+  // Captured independently of AuthProvider's own listener (which only acts on
+  // the auth-callback path): a non-auth URL is held until the `app` stage can
+  // receive it, since ExpenseForm/ExpenseDetail don't exist in any other stage.
+  useEffect(() => {
+    let cancelled = false;
+    Linking.getInitialURL()
+      .then(url => {
+        if (url && !cancelled) {
+          setPendingDeepLink(url);
+        }
+      })
+      .catch(() => undefined);
+    const subscription = Linking.addEventListener('url', ({ url }) => setPendingDeepLink(url));
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (stage !== 'app') {
+      return;
+    }
+    const link = takePendingDeepLink();
+    if (!link) {
+      return;
+    }
+    if (link.screen === 'ExpenseForm') {
+      navigationRef.navigate('ExpenseForm');
+    } else {
+      navigationRef.navigate('ExpenseDetail', { kharchaId: link.kharchaId });
+    }
+  }, [stage, navigationRef]);
+
   if (stage === 'splash') {
     return <LoadingView style={styles.splash} testID="app-splash" />;
   }
 
   return (
-    <NavigationContainer linking={linking} theme={navigationTheme}>
+    <NavigationContainer ref={navigationRef} linking={linking} theme={navigationTheme}>
       <Stack.Navigator screenOptions={stackScreenOptions}>
         {stage === 'auth' ? (
           <Stack.Group navigationKey="auth">

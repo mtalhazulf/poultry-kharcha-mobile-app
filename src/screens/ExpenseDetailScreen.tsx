@@ -5,15 +5,11 @@
  */
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, PanResponder, StyleSheet, View } from 'react-native';
 import { deleteKharcha, getKharcha } from '../api/kharcha';
 import { listKharchaHistory } from '../api/kharchaHistory';
-import {
-  formatLongDate,
-  formatSavedAt,
-  personName,
-} from '../components/expenses/expenseListModel';
+import { formatLongDate, formatSavedAt, personName } from '../components/expenses/expenseListModel';
 import { ReceiptPreview } from '../components/ReceiptPreview';
 import { useAuth } from '../context/AuthProvider';
 import { useOrg } from '../context/OrgProvider';
@@ -41,8 +37,16 @@ import {
 } from '../ui';
 import { CURRENCY, formatAmount, spacing } from '../theme';
 import type { KharchaHistoryEntry, KharchaWithOwner, Organization } from '../types/models';
+import { refreshWidget } from '../widgets/widgetTaskHandler';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ExpenseDetail'>;
+
+/** How far a horizontal drag must go, and how much it must dominate vertical
+ * movement, before it counts as a swipe to the next/previous expense rather
+ * than a scroll or a button tap. */
+const SWIPE_CLAIM_DX = 24;
+const SWIPE_COMMIT_DX = 60;
+const SWIPE_DIRECTION_RATIO = 1.5;
 
 export default function ExpenseDetailScreen({ navigation, route }: Props) {
   const { kharchaId } = route.params;
@@ -139,6 +143,48 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
     }, [load]),
   );
 
+  // Same order the Expenses tab shows (see sortKharcha): lets a swipe move
+  // between neighbors without fetching or holding a live list here.
+  const [siblingIds, setSiblingIds] = useState<string[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    readKharchaCache(userId, org.id).then(cache => {
+      if (!cancelled && cache) {
+        setSiblingIds(cache.items.map(item => item.id));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, org.id]);
+
+  const siblingIndex = siblingIds?.indexOf(kharchaId) ?? -1;
+  const nextId = siblingIndex >= 0 ? siblingIds?.[siblingIndex + 1] ?? null : null;
+  const prevId = siblingIndex > 0 ? siblingIds?.[siblingIndex - 1] ?? null : null;
+  // Read by the pan responder below; kept current every render so its
+  // (created-once) release handler never acts on a stale neighbor.
+  const nextIdRef = useRef<string | null>(null);
+  const prevIdRef = useRef<string | null>(null);
+  nextIdRef.current = nextId;
+  prevIdRef.current = prevId;
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_evt, gesture) =>
+          Math.abs(gesture.dx) > SWIPE_CLAIM_DX &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * SWIPE_DIRECTION_RATIO,
+        onPanResponderRelease: (_evt, gesture) => {
+          if (gesture.dx <= -SWIPE_COMMIT_DX && nextIdRef.current) {
+            navigation.setParams({ kharchaId: nextIdRef.current });
+          } else if (gesture.dx >= SWIPE_COMMIT_DX && prevIdRef.current) {
+            navigation.setParams({ kharchaId: prevIdRef.current });
+          }
+        },
+      }),
+    [navigation],
+  );
+
   const isOwner = kharcha !== null && kharcha.owner_id === userId;
   const canDelete = isOwner || isAdmin;
 
@@ -154,6 +200,7 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
         await deleteReceipt(kharcha.receipt_path).catch(() => undefined);
       }
       await deleteKharcha(kharcha.id);
+      refreshWidget().catch(() => undefined);
       navigation.goBack();
     } catch (err) {
       if (mountedRef.current) {
@@ -234,107 +281,112 @@ function ExpenseDetail({ navigation, kharchaId, userId, org, isAdmin }: DetailPr
   const savedAt = formatSavedAt(offlineAt);
 
   return (
-    <Screen scroll gap={spacing.xxl} footer={footer}>
-      {offline ? (
-        <Banner
-          tone="neutral"
-          icon="wifi-off"
-          message={
-            savedAt
-              ? `You're offline. Showing this expense as saved ${savedAt}.`
-              : "You're offline. Showing this expense as saved."
-          }
-          action={{ label: 'Try again', onPress: load }}
-          testID="detail-offline"
-        />
-      ) : null}
-      {actionError ? (
-        <ErrorBanner
-          message={actionError.message}
-          kind={actionError.kind}
-          onDismiss={() => setActionError(null)}
-        />
-      ) : null}
-      {error ? <ErrorBanner message={error.message} kind={error.kind} onRetry={load} /> : null}
+    <View style={styles.swipeArea} {...panResponder.panHandlers}>
+      <Screen scroll gap={spacing.xxl} footer={footer}>
+        {offline ? (
+          <Banner
+            tone="neutral"
+            icon="wifi-off"
+            message={
+              savedAt
+                ? `You're offline. Showing this expense as saved ${savedAt}.`
+                : "You're offline. Showing this expense as saved."
+            }
+            action={{ label: 'Try again', onPress: load }}
+            testID="detail-offline"
+          />
+        ) : null}
+        {actionError ? (
+          <ErrorBanner
+            message={actionError.message}
+            kind={actionError.kind}
+            onDismiss={() => setActionError(null)}
+          />
+        ) : null}
+        {error ? <ErrorBanner message={error.message} kind={error.kind} onRetry={load} /> : null}
 
-      <Card style={styles.card}>
-        <View style={styles.titleRow}>
-          <CategoryTile name={kharcha.category} icon={kharcha.category_icon} size="lg" />
-          <View style={styles.titleText}>
-            <AppText variant="headline" numberOfLines={2}>
-              {kharcha.category}
-            </AppText>
-            <AppText variant="callout" color="textSecondary">
-              {formatLongDate(kharcha.expense_date)}
+        <Card style={styles.card}>
+          <View style={styles.titleRow}>
+            <CategoryTile name={kharcha.category} icon={kharcha.category_icon} size="lg" />
+            <View style={styles.titleText}>
+              <AppText variant="headline" numberOfLines={2}>
+                {kharcha.category}
+              </AppText>
+              <AppText variant="callout" color="textSecondary">
+                {formatLongDate(kharcha.expense_date)}
+              </AppText>
+            </View>
+          </View>
+
+          <Money
+            amount={kharcha.amount}
+            currency={currency}
+            variant="amountLarge"
+            exact
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            testID="detail-amount"
+          />
+
+          <Divider />
+
+          <View style={styles.addedBy}>
+            <Avatar
+              size="sm"
+              name={kharcha.owner?.display_name}
+              email={kharcha.owner?.email}
+              uri={kharcha.owner?.avatar_url}
+            />
+            <AppText variant="callout" color="textSecondary" style={styles.addedByText}>
+              Added by {ownerLabel}
             </AppText>
           </View>
-        </View>
 
-        <Money
-          amount={kharcha.amount}
-          currency={currency}
-          variant="amountLarge"
-          exact
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          testID="detail-amount"
-        />
+          {kharcha.note ? (
+            <View style={styles.note}>
+              <AppText variant="caption" color="textSecondary">
+                Note
+              </AppText>
+              <AppText variant="body" testID="detail-note">
+                {kharcha.note}
+              </AppText>
+            </View>
+          ) : null}
+        </Card>
 
-        <Divider />
-
-        <View style={styles.addedBy}>
-          <Avatar
-            size="sm"
-            name={kharcha.owner?.display_name}
-            email={kharcha.owner?.email}
-            uri={kharcha.owner?.avatar_url}
-          />
-          <AppText variant="callout" color="textSecondary" style={styles.addedByText}>
-            Added by {ownerLabel}
-          </AppText>
-        </View>
-
-        {kharcha.note ? (
-          <View style={styles.note}>
-            <AppText variant="caption" color="textSecondary">
-              Note
-            </AppText>
-            <AppText variant="body" testID="detail-note">
-              {kharcha.note}
-            </AppText>
+        {kharcha.receipt_path ? (
+          <View style={styles.section}>
+            <SectionHeader title="Receipt" />
+            <ReceiptPreview path={kharcha.receipt_path} />
           </View>
         ) : null}
-      </Card>
 
-      {kharcha.receipt_path ? (
-        <View style={styles.section}>
-          <SectionHeader title="Receipt" />
-          <ReceiptPreview path={kharcha.receipt_path} />
-        </View>
-      ) : null}
-
-      {history.length > 0 ? (
-        <View style={styles.section}>
-          <SectionHeader title="History" />
-          <ListGroup separatorInset={LIST_TEXT_INSET}>
-            {history.map(entry => (
-              <ListItem
-                key={entry.id}
-                title={`${formatAmount(entry.amount, currency)} · ${entry.category}`}
-                subtitle={`Changed by ${personName(entry.editor)} · ${formatSavedAt(entry.edited_at) ?? ''}`}
-                leading={
-                  <CategoryTile name={entry.category} icon={entry.category_icon} size="sm" />
-                }
-              />
-            ))}
-          </ListGroup>
-        </View>
-      ) : null}
-    </Screen>
+        {history.length > 0 ? (
+          <View style={styles.section}>
+            <SectionHeader title="History" />
+            <ListGroup separatorInset={LIST_TEXT_INSET}>
+              {history.map(entry => (
+                <ListItem
+                  key={entry.id}
+                  title={`${formatAmount(entry.amount, currency)} · ${entry.category}`}
+                  subtitle={`Changed by ${personName(entry.editor)} · ${
+                    formatSavedAt(entry.edited_at) ?? ''
+                  }`}
+                  leading={
+                    <CategoryTile name={entry.category} icon={entry.category_icon} size="sm" />
+                  }
+                />
+              ))}
+            </ListGroup>
+          </View>
+        ) : null}
+      </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  swipeArea: { flex: 1 },
   card: { gap: spacing.lg },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   titleText: { flex: 1, gap: spacing.xxs },
