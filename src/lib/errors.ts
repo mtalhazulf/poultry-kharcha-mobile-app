@@ -1,6 +1,6 @@
 /**
- * Normalises the three error shapes we see (Supabase Auth, PostgREST/RLS,
- * fetch/network) into one type the UI can switch on.
+ * Normalises the error shapes we see (Supabase Auth, PostgREST/RLS, our
+ * RPCs, Storage, fetch/network) into one type the UI can switch on.
  */
 export type AppErrorKind =
   | 'auth'
@@ -17,6 +17,21 @@ interface ErrorLike {
   status?: unknown;
   name?: unknown;
   statusCode?: unknown;
+}
+
+const PERMISSION_MESSAGE = "You don't have permission to do that.";
+const NOT_FOUND_MESSAGE = 'Not found, or you no longer have access.';
+
+/**
+ * The RPCs in supabase/migrations raise sentences written for people
+ * ("Invite code not found"). Raw Postgres privilege/RLS wording is not.
+ */
+function isReadableServerMessage(message: unknown): message is string {
+  return (
+    typeof message === 'string' &&
+    message.trim().length > 0 &&
+    !/permission denied|row-level security|violates/i.test(message)
+  );
 }
 
 export class AppError extends Error {
@@ -50,13 +65,23 @@ export class AppError extends Error {
     if (/network request failed|failed to fetch|fetch failed|timeout/i.test(message)) {
       return new AppError('network', 'No connection. Check your network and try again.', err);
     }
-    // PostgREST: 42501 = insufficient_privilege (RLS rejected the statement).
+    // 42501 = insufficient_privilege: an RLS/grant rejection (generic sentence),
+    // or an RPC refusing the caller (its own sentence explains why).
     if (code === '42501' || status === 403) {
-      return new AppError('permission', "You don't have permission to do that.", err);
+      const readable = code === '42501' && isReadableServerMessage(e.message);
+      return new AppError('permission', readable ? message : PERMISSION_MESSAGE, err);
+    }
+    // P0002 = no_data_found, raised by RPCs ("Invite code not found").
+    if (code === 'P0002') {
+      return new AppError(
+        'not_found',
+        isReadableServerMessage(e.message) ? message : NOT_FOUND_MESSAGE,
+        err,
+      );
     }
     // PGRST116 = .single() matched zero rows (also what RLS-hidden rows look like).
     if (code === 'PGRST116' || status === 404) {
-      return new AppError('not_found', 'Not found, or you no longer have access.', err);
+      return new AppError('not_found', NOT_FOUND_MESSAGE, err);
     }
     // 23xxx = integrity constraint violations (bad input the DB rejected).
     if (code && code.startsWith('23')) {

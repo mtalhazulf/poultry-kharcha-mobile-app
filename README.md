@@ -1,8 +1,12 @@
-# Kharcha
+# MPS Expense Tracker
 
-Kharcha ("expense" in Urdu/Hindi) is an Android expense tracker built with
-React Native and Supabase. Record what you spent, attach a photo of the
-receipt, and share individual expenses read-only with other users by email.
+MPS Expense Tracker (codename "Kharcha" — "expense" in Urdu/Hindi) is an
+Android expense tracker built with React Native and Supabase for
+organizations that need shared, permissioned expense records. Anyone can
+create an account; from there you create your own organization or join an
+existing one with an invite code. Record what you spent, attach a photo of
+the receipt, and share individual expenses with teammates in your
+organization.
 
 - Package name: `com.mps.expensetracker`
 - Platform: Android only (no iOS project is checked in)
@@ -13,28 +17,66 @@ receipt, and share individual expenses read-only with other users by email.
 >
 > **Publishing:** see `docs/PLAY_STORE.md` (Play Console checklist, signing, store assets in `store/`).
 >
-> **Internal app.** Sign-up is invite-only: an admin adds staff emails in
-> **Settings → Staff**; the database rejects everyone else (email *and*
-> Google). The first account created becomes the admin — do that immediately
-> after deploying (or pre-seed it, see `docs/SUPABASE_SETUP.md`). Expense
-> types are one org-wide list (poultry defaults) that admins edit in
-> **Settings → Expense types**.
+> **Architecture:** see `docs/ARCHITECTURE.md` for the full build contract
+> (database schema, RPCs, contexts, navigation, design system).
+
+## Product overview
+
+- **Open sign-up.** Anyone can create an account with email/password or
+  Google. There is no invite gate on sign-up itself.
+- **Organizations.** After signing in, a user with no organization lands on
+  a welcome screen where they can create one (just a name) or join an
+  existing one with an 8-character invite code (`XXXX-XXXX`). Joining
+  creates a pending membership that an org owner or admin must approve.
+  A person can belong to several organizations and switch between them
+  from the header.
+- **Roles.** Each organization has one owner (its creator), any number of
+  admins, and members. Owners/admins see every expense in the organization
+  and manage expense types, the invite code, join requests, and member
+  roles/status. Members see their own expenses plus expenses explicitly
+  shared with them.
+- **Sharing** is scoped to the organization: you can only share an expense
+  with another active member of the same org.
+
+## Features
+
+- Email/password and Google sign-in
+- Create or join an organization (invite code with approval workflow)
+- Switch between multiple organizations
+- Add, edit, and delete expenses with amount, expense type, date, note, and
+  an optional receipt photo
+- Expense types (categories) with line icons, managed per organization
+- Share expenses read-only with other active members of the same org
+- Reports: totals, breakdown by category/member/day, period comparisons
+- Team management: approve/decline join requests, set member roles and
+  status, remove members, transfer ownership, regenerate the invite code
+- Optional biometric sign-in (fingerprint/face) with an auto-lock after the
+  app has been backgrounded for 60 seconds
+- Offline cache for the expense list; realtime updates while online
 
 ## Architecture
 
 | Layer | What it does |
 | --- | --- |
-| React Native 0.87 (New Architecture, Hermes), TypeScript strict | UI, navigation (`@react-navigation/native-stack`), local state |
+| React Native 0.87 (New Architecture, Hermes), TypeScript strict | UI, navigation, local state |
+| `@react-navigation/native-stack` + `@react-navigation/bottom-tabs` | Root stack (auth, org onboarding, lock screen) plus the main bottom-tab navigator (Expenses, Reports, Team, Settings) |
 | `@supabase/supabase-js` | Auth (email/password + Google), PostgREST queries, Storage, Realtime |
-| Postgres + Row Level Security | **The access-control layer.** The client never filters by owner; every SELECT/INSERT/UPDATE/DELETE is scoped by the policies in `supabase/migrations/20260910120000_init_kharcha.sql`. A compromised client cannot read or write another user's rows. |
-| Private `receipts` storage bucket | Receipts are uploaded to `receipts/{kharcha_id}/{filename}`. The bucket is private; the app reads receipts through short-lived **signed URLs**, and storage policies reuse the same owner-or-shared rule as the table. |
-| Realtime | The dashboard subscribes to `postgres_changes` on `kharcha` and `kharcha_shares`; Supabase re-checks RLS per subscriber so users only receive events for rows they may read. |
-| AsyncStorage offline cache | The last successful expense list is cached in `@react-native-async-storage/async-storage` so the app opens instantly and still shows data without a connection. |
+| Postgres + Row Level Security | **The access-control layer.** The client never filters by organization or owner; every SELECT/INSERT/UPDATE/DELETE is scoped by the policies in `supabase/migrations/`. A compromised client cannot read or write another organization's or user's rows. |
+| Private `receipts` storage bucket | Receipts are uploaded to `receipts/{kharcha_id}/{filename}`. The bucket is private; the app reads receipts through short-lived **signed URLs**, and storage policies reuse the same access rules as the `kharcha` table. |
+| Realtime | Expense and Reports screens subscribe to `postgres_changes` on `kharcha` and `kharcha_shares`, filtered to the active organization; Supabase re-checks RLS per subscriber so users only receive events for rows they may read. |
+| `react-native-keychain` | Stores the Supabase auth session in the Android Keystore (not AsyncStorage) and gates it behind an optional biometric prompt for the Lock screen. |
+| `react-native-keyboard-controller` + `react-native-reanimated` + `react-native-worklets` | Keyboard-aware forms (focused field scrolls above the keyboard, sticky footers) and UI animations/gestures. |
+| `lucide-react-native` | Line icons used throughout the UI and for expense-type icons (no emoji). |
+| AsyncStorage offline cache | The last successful expense list is cached in `@react-native-async-storage/async-storage`, keyed per user and organization, so the app opens instantly and still shows data without a connection. The active organization id is also persisted here. |
 | `react-native-config` | Bakes `.env` values (Supabase URL/key, Google client id, redirect URL) into the APK at build time. |
 
 Sharing model: an expense is `private` or `shared`. Sharing adds a row to
-`kharcha_shares`; recipients get read access to the row and its receipt but
-have no update/delete policy, so they are read-only by construction.
+`kharcha_shares` for another active member of the same organization;
+recipients get read access to the row and its receipt but have no
+update/delete policy, so they are read-only by construction.
+
+See `docs/ARCHITECTURE.md` for the full data model, RPC list, TypeScript
+contracts, navigation graph, and design system tokens.
 
 ## Prerequisites
 
@@ -58,10 +100,13 @@ to `.env` needs a rebuild** (`bun run android`), not just a Metro reload.
 
 ### Supabase
 
-The schema, RLS policies, storage bucket and realtime publication live in a
-single migration under `supabase/migrations/`. It is already applied to the
-project above. To point the app at a different project, or to configure Auth
-providers and redirect URLs, follow [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
+The schema, RLS policies, storage bucket, realtime publication, and the
+organizations/roles model live in the migrations under `supabase/migrations/`,
+applied in filename order. They are already applied to the project above. To
+point the app at a different project, apply the migrations and follow
+[docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md) for the auth checklist —
+no manual SQL is needed to bootstrap the first organization: just create an
+account in the app and create an organization from the welcome screen.
 
 ### Google Sign-In
 
@@ -139,19 +184,22 @@ never for distribution.
 │   ├── app/build.gradle         react-native-config plugin, release signing, R8
 │   ├── app/proguard-rules.pro   Keep rules for config/Google Sign-In/image picker
 │   └── keystore.properties.example
-├── docs/SUPABASE_SETUP.md       Backend setup, auth checklist, RLS verification
+├── docs/
+│   ├── ARCHITECTURE.md          Build contract: data model, RPCs, contexts, navigation, design system
+│   └── SUPABASE_SETUP.md        Backend setup, auth checklist, RLS/RPC reference
 ├── src/
 │   ├── App.tsx                  Root component: providers + navigator
-│   ├── api/                     Typed Supabase queries (kharcha, profiles, shares)
-│   ├── components/              Reusable UI (ui.tsx primitives, ExpenseListItem)
-│   ├── context/                 AuthProvider (session, sign-in/out)
-│   ├── hooks/                   useKharchaList (fetch + realtime + offline cache)
-│   ├── lib/                     supabase client, env, auth helpers, receipts, offlineCache, errors
-│   ├── navigation/              Route param types
-│   ├── screens/                 Login, Dashboard, Add/Edit expense, Share modal, ...
-│   ├── theme/                   Design tokens + formatAmount/formatDate helpers
+│   ├── api/                     Typed Supabase queries (organizations, members, kharcha, categories, shares, profiles, reports)
+│   ├── components/              Shared composite components (e.g. AppHeader, OrgSwitcherSheet, ExpenseListItem)
+│   ├── ui/                      Design-system primitives (Icon, Button, TextField, Card, ListItem, Sheet, Screen, ...) imported via the `src/ui` barrel
+│   ├── context/                 AuthProvider (session), OrgProvider (memberships/active org), BiometricLockProvider (app lock + biometrics)
+│   ├── hooks/                   useCategories, useKharchaList (fetch + realtime + offline cache, scoped per org)
+│   ├── lib/                     Supabase client, env, auth helpers, secureStorage (Keychain), biometrics, receipts, offlineCache, errors
+│   ├── navigation/               Root stack + bottom-tab param types
+│   ├── screens/                 Login/SignUp, Lock, OrgWelcome/CreateOrg/JoinOrg, Expenses/Reports/Team/Settings tabs, expense form/detail, expense types, org settings, member detail
+│   ├── theme/                   Design tokens (colors, spacing, radius, typography) + formatAmount/formatDate helpers
 │   └── types/                   database.ts (generated), models.ts, env.d.ts
-├── supabase/migrations/         Schema, RLS, triggers, storage policies, realtime
+├── supabase/migrations/         Schema, RLS, triggers, storage policies, realtime, organizations model
 ├── __tests__/                   Jest unit tests
 ├── __mocks__/                   react-native-config test fixture
 ├── jest.config.js / jest.setup.ts
@@ -175,12 +223,15 @@ never for distribution.
     -d "kharcha://auth/callback?code=test" com.mps.expensetracker
   ```
 
-  It must open Kharcha (not "Activity not started"). Then make sure
+  It must open the app (not "Activity not started"). Then make sure
   `kharcha://auth/callback` is listed in Supabase -> Authentication -> URL
   Configuration -> Redirect URLs.
 - **Rows missing or writes rejected with "permission"** — that is RLS
-  working as designed. See the verification section in
-  `docs/SUPABASE_SETUP.md` to check policies with two test users.
+  working as designed (organization membership, role, or status doesn't
+  grant that access). See the RLS reference in `docs/SUPABASE_SETUP.md`.
+- **No organization / stuck on "Waiting for approval"** — the account has no
+  active membership yet. Create an organization, or ask an owner/admin of
+  the target organization to approve the pending join request.
 - **Gradle out of memory** — `android/gradle.properties` sets
   `-Xmx4g`; lower it on small CI runners or raise it on large builds.
 - **Stale native build** — `bun run clean:android` then `bun run android`.

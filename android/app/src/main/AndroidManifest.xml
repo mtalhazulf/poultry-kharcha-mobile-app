@@ -2,6 +2,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Biometric sign-in (react-native-keychain -> BiometricPrompt). Install-time
+         permission; the library also merges USE_FINGERPRINT for API < 28. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- Receipt capture (react-native-image-picker launchCamera). Runtime-requested. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Gallery selection goes through the Android Photo Picker, which needs

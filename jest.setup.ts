@@ -34,3 +34,15 @@ jest.mock('react-native-image-picker', () => ({
 // The polyfill is a side-effect import in index.js; it is harmless under
 // Node but noisy, and Node's URL is already spec-compliant.
 jest.mock('react-native-url-polyfill/auto', () => ({}));
+
+// Reanimated 4 (+ react-native-worklets): the library's own JS mock, no UI runtime.
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+
+// Keyboard controller's official mock: KeyboardProvider is a host stub,
+// KeyboardAwareScrollView renders a ScrollView, KeyboardStickyView a View.
+jest.mock('react-native-keyboard-controller', () =>
+  require('react-native-keyboard-controller/jest'),
+);
+
+// In-memory Keystore/Keychain from __mocks__/react-native-keychain.ts.
+jest.mock('react-native-keychain');

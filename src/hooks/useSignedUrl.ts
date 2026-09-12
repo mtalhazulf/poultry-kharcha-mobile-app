@@ -21,6 +21,8 @@ export function useSignedUrl(path: string | null, expiresIn = 300): SignedUrlSta
   // Bumping this re-runs the effect below without changing `path`.
   const [nonce, setNonce] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The path the current URL belongs to, so a re-mint can keep it on screen. */
+  const urlPathRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => {
     setNonce(n => n + 1);
@@ -34,19 +36,28 @@ export function useSignedUrl(path: string | null, expiresIn = 300): SignedUrlSta
     }
 
     if (!path) {
+      urlPathRef.current = null;
       setUrl(null);
       setLoading(false);
       setError(null);
       return;
     }
 
-    setLoading(true);
+    // A re-mint (the timer below) keeps the URL it replaces on screen: blanking
+    // it would swap the drawn receipt for a spinner and force a full
+    // re-download every few minutes. Only a new path starts from nothing.
+    const reminting = urlPathRef.current === path;
+    if (!reminting) {
+      setUrl(null);
+    }
+    setLoading(!reminting);
     setError(null);
     getReceiptSignedUrl(path, expiresIn)
       .then(signed => {
         if (cancelled) {
           return;
         }
+        urlPathRef.current = path;
         setUrl(signed);
         setLoading(false);
         // Re-mint at 80% of the lifetime so an on-screen image never goes stale.
@@ -56,6 +67,7 @@ export function useSignedUrl(path: string | null, expiresIn = 300): SignedUrlSta
         if (cancelled) {
           return;
         }
+        urlPathRef.current = null;
         setUrl(null);
         setError(AppError.from(err));
         setLoading(false);

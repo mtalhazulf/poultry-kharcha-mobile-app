@@ -1,14 +1,15 @@
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 import type { Database } from '../types/database';
 import { env } from './env';
 import { AppError } from './errors';
+import { secureStorage } from './secureStorage';
 
 export const supabase = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
+    // Keystore-encrypted; migrates a session saved by older builds in AsyncStorage.
+    storage: secureStorage,
     autoRefreshToken: true,
     persistSession: true,
     // No browser URL to inspect in React Native; OAuth callbacks are handled
